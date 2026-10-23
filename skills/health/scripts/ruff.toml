@@ -1,0 +1,7 @@
+# Used only when the project has no ruff config of its own.
+# S is bandit's security rules; C90 is complexity.
+[lint]
+select = ["E", "F", "B", "S", "C90", "PL", "I", "N", "UP", "SIM"]
+
+[lint.mccabe]
+max-complexity = 10
