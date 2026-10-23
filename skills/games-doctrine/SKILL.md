@@ -111,6 +111,11 @@ export const platform: Platform = pickPlatform(); // poki | crazygames | noop
 
 Nothing outside `platform/` imports a portal SDK.
 
+A portal's own rules decide much of the build: download size, key bindings,
+legibility at DPR 1, ad timing, progress save and covers. Load the portal's
+publishing skill before writing the game, not just before submitting it. For
+CrazyGames, that is `crazygames-publishing`. Each rule there becomes a test.
+
 ## The legitimate big files
 
 - **Generated level tables** - a script writes a year of daily levels into one
