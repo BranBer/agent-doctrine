@@ -1,0 +1,6 @@
+{
+  "name": "doctrine",
+  "private": true,
+  "type": "module",
+  "description": "Skills that keep any project decoupled, readable and basically secure: a language-neutral core plus a pack per stack."
+}
