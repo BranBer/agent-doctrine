@@ -1,5 +1,6 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 
 export const SKIP_DIRS = new Set([
   'node_modules', 'dist', 'build', 'out', 'coverage', '.git', '.venv', 'venv', 'env',
@@ -11,6 +12,25 @@ const readJson = (path) => {
     return JSON.parse(readFileSync(path, 'utf8'));
   } catch {
     return {};
+  }
+};
+
+/* A workspace hoists dependencies to its root, so look upward for them - but
+   no further than the repository, or a stray node_modules in the home folder
+   would count. */
+const hasNodeModules = (dir) => {
+  for (let d = dir; ; d = dirname(d)) {
+    if (existsSync(join(d, 'node_modules'))) return true;
+    if (existsSync(join(d, '.git')) || dirname(d) === d) return false;
+  }
+};
+
+const inGitRepo = (dir) => {
+  try {
+    execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: dir, stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
   }
 };
 
@@ -32,7 +52,7 @@ export function detectStacks(root) {
         typescript: Boolean(deps.typescript) || names.includes('tsconfig.json'),
         react: Boolean(deps.react),
         scripts: pkg.scripts ?? {},
-        installed: names.includes('node_modules'),
+        installed: hasNodeModules(dir),
       });
     }
     if (PY_MARKERS.some((m) => names.includes(m))) python.push({ dir, rel: relative(root, dir) || '.' });
@@ -42,7 +62,7 @@ export function detectStacks(root) {
     }
   };
   visit(root, 0);
-  return { js, python, git: existsSync(join(root, '.git')) };
+  return { js, python, git: inGitRepo(root) };
 }
 
 export const hasPyrightConfig = (dir) =>

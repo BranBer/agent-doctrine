@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readdirSync, readlinkSync, renameSync, symlinkSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /* Links every skill in skills/ into each agent's skill folder, so this repo is
@@ -19,11 +19,19 @@ const HOMES = [join(homedir(), '.claude', 'skills'), join(homedir(), '.agents', 
 const BACKUP = join(homedir(), '.claude', 'skills-backup', new Date().toISOString().slice(0, 10));
 const remove = process.argv.includes('--remove');
 
-const isLink = (path) => existsSync(path) && lstatSync(path).isSymbolicLink();
+// lstat, not exists: a junction whose target is gone still occupies its name.
+const stat = (path) => {
+  try {
+    return lstatSync(path);
+  } catch {
+    return null;
+  }
+};
+const isLink = (path) => stat(path)?.isSymbolicLink() ?? false;
 const pointsAt = (path, target) => isLink(path) && resolve(readlinkSync(path)) === resolve(target);
-const intoRepo = (path) => isLink(path) && resolve(readlinkSync(path)).startsWith(resolve(SKILLS));
+const intoRepo = (path) => isLink(path) && resolve(readlinkSync(path)).startsWith(resolve(SKILLS) + sep);
 
-const report = { linked: [], kept: [], 'backed up': [], removed: [] };
+const report = { linked: [], kept: [], 'backed up': [], removed: [], 'left alone (a link to somewhere else)': [] };
 const names = readdirSync(SKILLS, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name);
@@ -47,8 +55,14 @@ for (const home of HOMES) {
       report.kept.push(path);
       continue;
     }
-    if (isLink(path)) unlinkSync(path);
-    else if (existsSync(path)) {
+    if (isLink(path)) {
+      // A broken link into this repo is ours to replace; a link elsewhere is not.
+      if (!intoRepo(path)) {
+        report['left alone (a link to somewhere else)'].push(`${path} -> ${readlinkSync(path)}`);
+        continue;
+      }
+      unlinkSync(path);
+    } else if (stat(path)) {
       mkdirSync(BACKUP, { recursive: true });
       const saved = join(BACKUP, `${home.includes('.agents') ? 'agents-' : ''}${name}`);
       renameSync(path, saved);
@@ -63,7 +77,7 @@ if (!remove) {
   for (const name of names) {
     const scripts = join(SKILLS, name, 'scripts');
     if (!existsSync(join(scripts, 'package.json'))) continue;
-    const r = spawnSync('npm', ['install', '--no-audit', '--no-fund'], { cwd: scripts, stdio: 'inherit', shell: true });
+    const r = spawnSync('npm install --no-audit --no-fund', { cwd: scripts, stdio: 'inherit', shell: true });
     if (r.status !== 0) console.log(`npm install failed in ${scripts}`);
   }
 }

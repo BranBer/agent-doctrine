@@ -130,5 +130,5 @@ dependency scans. Check by hand, or have a reviewer check, that nothing in
 `sim/` imports `phaser`, `three`, `scenes/` or `render/`:
 
 ```bash
-grep -rnE "from ['\"](phaser|three)|from ['\"].*/(scenes|render)/" src/game/sim
+grep -rnE "from ['\"](phaser|three)|from ['\"].*/(scenes|render)(/|['\"])" src/game/sim
 ```

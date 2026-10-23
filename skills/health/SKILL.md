@@ -54,13 +54,13 @@ minute or two when the security-pattern scan is not wanted.
 
 | Key | Step | Tool | Stacks | Fails the run? |
 |---|---|---|---|---|
-| `types` | type check | the project's `typecheck` script, else `tsc --noEmit`; pyright | TS; Python | yes, when the project configures types (`tsconfig.json`, `pyrightconfig.json` or `[tool.pyright]`) |
-| `cycles` | import cycles | ESLint `import-x/no-cycle` (resolving `@/` aliases through the project's tsconfig); `pycycles.py` | JS/TS; Python | yes |
+| `types` | type check | the project's `typecheck` script, else `tsc --noEmit` on its `tsconfig.json` - or on each config a Vite-style root references; pyright | TS; Python | yes, when the project configures types (`tsconfig.json`, `pyrightconfig.json` or `[tool.pyright]`) |
+| `cycles` | import cycles | ESLint `import-x/no-cycle` (resolving `@/` aliases through the project's tsconfig; fails on cycles only, and lists files it could not parse); `pycycles.py` (ignoring `if TYPE_CHECKING:` imports) | JS/TS; Python | yes |
 | `lint` | lint and smells | ESLint with typescript-eslint and SonarJS rules, summarised by rule and file | JS/TS | no |
 | `ruff` | lint, smells, security | ruff, including bandit's `S` security rules and `C90` complexity; the project's own ruff config if it has one | Python | no |
 | `unused` | unused code | knip; vulture | JS/TS; Python | no |
 | `sizes` | file sizes | the doctrine's limits - 400 source, 600 tests, 200 React components, 800 waived | any | no |
-| `duplication` | copy-paste | jscpd | any | no |
+| `duplication` | copy-paste | jscpd, listing each clone | any | no |
 | `secrets` | committed secrets | gitleaks, over the git history | any git repo | yes |
 | `deps` | vulnerable dependencies | OSV-Scanner, reading the lockfiles (npm, PyPI and more, no account) | any | no |
 | `semgrep` | security patterns | Semgrep Community Edition, `p/default` rules, metrics off | any | no |

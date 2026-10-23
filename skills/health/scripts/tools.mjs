@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hasPyrightConfig, hasRuffConfig } from './stacks.mjs';
@@ -30,6 +30,20 @@ const INSTALL = {
   python: 'install Python 3',
 };
 
+/* The configs to type-check. A Vite-style root tsconfig lists no files of its
+   own and only references others, so checking it alone checks nothing. */
+function tsProjects(dir) {
+  try {
+    const text = readFileSync(join(dir, 'tsconfig.json'), 'utf8').replace(/\/\*[\s\S]*?\*\/|^\s*\/\/.*$/gm, '').replace(/,(\s*[}\]])/g, '$1');
+    const config = JSON.parse(text);
+    const refs = (config.references ?? []).map((r) => (r.path.endsWith('.json') ? r.path : join(r.path, 'tsconfig.json')));
+    const ownsNothing = Array.isArray(config.files) && config.files.length === 0 && !config.include;
+    return refs.length && ownsNothing ? refs : ['tsconfig.json'];
+  } catch {
+    return ['tsconfig.json'];
+  }
+}
+
 const need = (key, cmd) => (which(cmd) ? null : `${INSTALL[key] ?? `install ${cmd}`}`);
 
 /* One step per tool per project folder. A step is either runnable -
@@ -47,12 +61,17 @@ export function steps(root, stacks) {
       else if (s.scripts.typecheck) add({ key: 'types', name: `types${at}`, cmd: 'npm', args: ['run', 'typecheck'], cwd: s.dir, gate: true });
       else {
         const local = join(s.dir, 'node_modules', '.bin', WIN ? 'tsc.cmd' : 'tsc');
-        add({ key: 'types', name: `types${at}`, cmd: existsSync(local) ? local : bin('tsc'), args: ['--noEmit', '-p', 'tsconfig.json'], cwd: s.dir, gate: true });
+        const tsc = existsSync(local) ? local : bin('tsc');
+        for (const project of tsProjects(s.dir)) {
+          const which = project === 'tsconfig.json' ? '' : ` ${project}`;
+          add({ key: 'types', name: `types${at}${which}`, cmd: tsc, args: ['--noEmit', '-p', project], cwd: s.dir, gate: true });
+        }
       }
     }
     const eslint = { cmd: bin('eslint'), cwd: s.dir };
-    add({ key: 'cycles', name: `import cycles${at}`, ...eslint, args: ['-c', ESLINT_CONFIG, '.'], env: { HEALTH_ONLY: 'cycles' }, gate: true });
-    add({ key: 'lint', name: `lint and smells${at}`, ...eslint, args: ['-c', ESLINT_CONFIG, '-f', 'json', '.'], gate: false, summary: 'eslint' });
+    const lintArgs = ['-c', ESLINT_CONFIG, '--no-error-on-unmatched-pattern', '-f', 'json', '.'];
+    add({ key: 'cycles', name: `import cycles${at}`, ...eslint, args: lintArgs, env: { HEALTH_ONLY: 'cycles' }, gate: true, summary: 'cycles' });
+    add({ key: 'lint', name: `lint and smells${at}`, ...eslint, args: lintArgs, gate: false, summary: 'eslint' });
     if (s.installed) add({ key: 'unused', name: `unused code${at}`, cmd: bin('knip'), args: ['--no-progress'], cwd: s.dir, gate: false });
     else add({ key: 'unused', name: `unused code${at}`, skip: `node_modules missing - run npm install in ${s.rel}` });
   }
@@ -61,7 +80,7 @@ export function steps(root, stacks) {
     const at = s.rel === '.' ? '' : ` (${s.rel})`;
     const uvx = need('uvx', 'uvx');
     const ruffArgs = ['check', ...(hasRuffConfig(s.dir) ? [] : ['--config', join(HERE, 'ruff.toml')]), '.'];
-    add(uvx ? { key: 'ruff', name: `ruff${at}`, skip: uvx } : { key: 'ruff', name: `ruff${at}`, cmd: 'uvx', args: [RUFF, ...ruffArgs, '--statistics'], cwd: s.dir, gate: false });
+    add(uvx ? { key: 'ruff', name: `ruff${at}`, skip: uvx } : { key: 'ruff', name: `ruff${at}`, cmd: 'uvx', args: [RUFF, ...ruffArgs, '--statistics', '--no-cache'], cwd: s.dir, gate: false });
     const pyright = need('pyright', 'pyright');
     add(pyright ? { key: 'types', name: `types${at}`, skip: pyright } : { key: 'types', name: `types${at}`, cmd: 'pyright', args: ['.'], cwd: s.dir, gate: hasPyrightConfig(s.dir) });
     add(uvx ? { key: 'unused', name: `unused code${at}`, skip: uvx } : { key: 'unused', name: `unused code${at}`, cmd: 'uvx', args: ['vulture', '.', '--min-confidence', '80', '--exclude', '.venv,venv,node_modules'], cwd: s.dir, gate: false });
@@ -71,7 +90,7 @@ export function steps(root, stacks) {
 
   const reactDirs = stacks.js.filter((s) => s.react).flatMap((s) => ['--react', s.dir]);
   add({ key: 'sizes', name: 'file sizes', cmd: process.execPath, args: [join(HERE, 'sizes.mjs'), root, ...reactDirs], cwd: root, gate: false });
-  add({ key: 'duplication', name: 'duplication', cmd: bin('jscpd'), args: [root, '--ignore', IGNORE, '--min-tokens', '70', '--reporters', 'console', '--silent', '--exit-code', '1'], cwd: root, gate: false });
+  add({ key: 'duplication', name: 'duplication', cmd: bin('jscpd'), args: [root, '--ignore', IGNORE, '--min-tokens', '70', '--reporters', 'console', '--exit-code', '1'], cwd: root, gate: false });
 
   const gitleaks = which('gitleaks');
   if (!gitleaks) add({ key: 'secrets', name: 'committed secrets', skip: INSTALL.gitleaks });

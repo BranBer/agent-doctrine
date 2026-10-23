@@ -21,6 +21,26 @@ def module_name(path: Path, root: Path) -> str:
     return ".".join(parts)
 
 
+def is_type_checking(node: ast.AST) -> bool:
+    test = getattr(node, "test", None)
+    return isinstance(node, ast.If) and (
+        (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING")
+        or (isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING")
+    )
+
+
+def runtime_nodes(tree: ast.AST):
+    """Every node except those under `if TYPE_CHECKING:`, which never run."""
+    stack = [tree]
+    while stack:
+        node = stack.pop()
+        yield node
+        if is_type_checking(node):
+            stack.extend(node.orelse)
+            continue
+        stack.extend(ast.iter_child_nodes(node))
+
+
 def imports_of(path: Path, name: str, known: set[str]) -> set[str]:
     try:
         tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
@@ -28,7 +48,7 @@ def imports_of(path: Path, name: str, known: set[str]) -> set[str]:
         return set()
     package = name if path.name == "__init__.py" else name.rpartition(".")[0]
     found: set[str] = set()
-    for node in ast.walk(tree):
+    for node in runtime_nodes(tree):
         if isinstance(node, ast.Import):
             targets = [alias.name for alias in node.names]
         elif isinstance(node, ast.ImportFrom):
@@ -37,7 +57,10 @@ def imports_of(path: Path, name: str, known: set[str]) -> set[str]:
                 parent = package.split(".") if package else []
                 parent = parent[: len(parent) - (node.level - 1)] if node.level > 1 else parent
                 base = ".".join([*parent, base] if base else parent)
-            targets = [base] + [f"{base}.{alias.name}" if base else alias.name for alias in node.names]
+            # `from pkg import sub` imports the module pkg.sub when there is one,
+            # and only otherwise a name from pkg's __init__.
+            full = [f"{base}.{alias.name}" if base else alias.name for alias in node.names]
+            targets = [t for t in full if t in known] or [base]
         else:
             continue
         for target in targets:
@@ -88,7 +111,9 @@ def cycles(graph: dict[str, set[str]]) -> list[list[str]]:
 def main() -> int:
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
     files = [p for p in root.rglob("*.py") if not SKIP.intersection(p.relative_to(root).parts)]
-    names = {module_name(p, root): p for p in files}
+    # In a src/ layout the package is imported as `app`, not `src.app`.
+    base = root / "src" if (root / "src").is_dir() else root
+    names = {module_name(p, base if base in p.parents else root): p for p in files}
     known = set(names)
     graph = {name: imports_of(path, name, known) for name, path in names.items()}
     found = cycles(graph)

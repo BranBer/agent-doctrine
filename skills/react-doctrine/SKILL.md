@@ -67,8 +67,8 @@ Component-specific hooks stay in the component's folder (`Card/useCardMetrics/`)
 
 A hook over 400 code lines means the pure logic isn't pure-logic-shaped yet — move it to `src/utils/`:
 
-- `src/utils/` is flat and **exempt** from rule 1: `src/utils/formatCurrency.ts`.
-- A cluster of utils meant to be used together gets a folder with a barrel: `src/utils/dates/{parse.ts,format.ts,diff.ts,index.ts}`.
+- `src/utils/` holds subjects, and a subject is a file until it needs a second one: `formatCurrency` goes in `src/utils/money.ts`, not a file of its own.
+- A subject that grows several files gets a folder with a barrel: `src/utils/dates/{parse.ts,format.ts,diff.ts,index.ts}`.
 
 ## 4. Comments earn their line
 

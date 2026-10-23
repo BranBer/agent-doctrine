@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { SKIP_DIRS } from './stacks.mjs';
@@ -22,14 +22,22 @@ const STRINGS = /'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`[^`]*`/g;
 const JS_LOGIC = /\b(function|class|if|for|while|return|switch)\b|=>/;
 const PY_LOGIC = /^\s*(def|class|if|for|while|return)\b|\blambda\b/m;
 
+const opensTriple = (line, quote) => line.split(quote).length % 2 === 0;
+
 export function codeLines(text, ext) {
   const py = PY.has(ext);
   let count = 0;
-  let block = null;
+  let block = null; // inside a comment or docstring: lines not counted
+  let string = null; // inside a multi-line string that is a value: lines counted
   for (const raw of text.split('\n')) {
     const line = raw.trim();
     if (block) {
       if (line.includes(block)) block = null;
+      continue;
+    }
+    if (string) {
+      count += 1;
+      if (line.includes(string)) string = null;
       continue;
     }
     if (!line) continue;
@@ -37,9 +45,12 @@ export function codeLines(text, ext) {
       if (line.startsWith('#')) continue;
       const quote = line.startsWith('"""') ? '"""' : line.startsWith("'''") ? "'''" : null;
       if (quote) {
-        if (line.length === 3 || !line.slice(3).includes(quote)) block = quote;
+        // A string that starts a line is a docstring; it runs to its closing quotes.
+        if (opensTriple(line, quote)) block = quote;
         continue;
       }
+      // A triple-quoted string opened mid-line is a value, and its lines are code.
+      string = ['"""', "'''"].find((q) => opensTriple(line, q)) ?? null;
     } else {
       if (line.startsWith('//') || line.startsWith('*')) continue;
       if (line.startsWith('/*')) {
@@ -61,8 +72,9 @@ const isDataOnly = (text, ext) => {
    output and anything else the project ignores is never sized. */
 const listFiles = (root) => {
   try {
-    const out = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 });
-    const files = out.split(/\r?\n/).filter((f) => f && (JS.has(extname(f)) || PY.has(extname(f))));
+    const out = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 });
+    // A tracked file deleted from disk is still listed until the deletion is committed.
+    const files = out.split('\0').filter((f) => f && (JS.has(extname(f)) || PY.has(extname(f))) && existsSync(join(root, f)));
     if (!files.length) return walk(root);
     return files.map((f) => join(root, f));
   } catch {
@@ -104,7 +116,7 @@ export function oversized(root, reactDirs = []) {
   return over.sort((a, b) => b.lines - a.lines);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = process.argv.slice(2);
   const reactDirs = args.flatMap((a, i) => (args[i - 1] === '--react' ? [a] : []));
   const root = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--react') ?? '.';

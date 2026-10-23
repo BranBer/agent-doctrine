@@ -1,18 +1,32 @@
 /* Long tool outputs, cut down to what a reader decides on. Each takes the
-   tool's JSON on stdout and the project root (to shorten paths). */
+   tool's JSON on stdout and the project root (to shorten paths), and may
+   return { ok } to decide the step's result itself. */
 
 const top = (map, n) => [...map].sort((a, b) => b[1] - a[1]).slice(0, n);
 
+// With inline config off, ESLint notes each directive it ignored; those are not findings.
+const messages = (results) =>
+  results.flatMap((r) => r.messages.filter((m) => m.ruleId || !/inline config|noInlineConfig|has no effect/i.test(m.message)).map((m) => ({ ...m, filePath: r.filePath })));
+
+/* The cycle gate fails on cycles only: a file the parser cannot read is
+   listed, but it is not a cycle. */
+function cycles(stdout, root) {
+  const all = messages(JSON.parse(stdout));
+  const found = all.filter((m) => m.ruleId === 'import-x/no-cycle');
+  for (const m of found) console.log(`cycle: ${m.filePath.replace(root, '.')}:${m.line}`);
+  const unread = [...new Set(all.filter((m) => !m.ruleId).map((m) => m.filePath))];
+  for (const f of unread) console.log(`not parsed: ${f.replace(root, '.')}`);
+  console.log(found.length ? `${found.length} import(s) in a cycle` : 'no import cycles');
+  return { ok: found.length === 0 };
+}
+
 function eslint(stdout, root) {
-  const results = JSON.parse(stdout);
   const byRule = new Map();
   const byFile = new Map();
-  for (const r of results) {
-    for (const m of r.messages) {
-      const rule = m.ruleId ?? 'parse error';
-      byRule.set(rule, (byRule.get(rule) ?? 0) + 1);
-      byFile.set(r.filePath, (byFile.get(r.filePath) ?? 0) + 1);
-    }
+  for (const m of messages(JSON.parse(stdout))) {
+    const rule = m.ruleId ?? 'parse error';
+    byRule.set(rule, (byRule.get(rule) ?? 0) + 1);
+    byFile.set(m.filePath, (byFile.get(m.filePath) ?? 0) + 1);
   }
   const total = [...byRule.values()].reduce((a, b) => a + b, 0);
   console.log(`${total} finding(s) in ${byFile.size} file(s)`);
@@ -55,12 +69,13 @@ function osv(stdout, root) {
   }
 }
 
-const SUMMARIES = { eslint, osv };
+const SUMMARIES = { cycles, eslint, osv };
 
 export function summarize(kind, stdout, root) {
   try {
-    SUMMARIES[kind](stdout, root);
+    return SUMMARIES[kind](stdout, root) ?? {};
   } catch {
     console.log(stdout.slice(0, 4000));
+    return {};
   }
 }

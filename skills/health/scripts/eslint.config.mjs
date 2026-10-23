@@ -21,14 +21,16 @@ export default tseslint.config(
   { ignores: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/coverage/**', '**/*.min.js', '**/*.d.ts'] },
   ...(existsSync(GITIGNORE) ? [includeIgnoreFile(GITIGNORE)] : []),
   {
-    files: ['**/*.{ts,tsx,mts,cts}'],
-    languageOptions: { parser: tseslint.parser },
-  },
-  {
     files: ['**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'],
+    // One parser for every file: it reads TS by extension and JSX in .js too.
+    languageOptions: { parser: tseslint.parser, parserOptions: { ecmaFeatures: { jsx: true } } },
     plugins: { 'import-x': importX },
     linterOptions: { noInlineConfig: true, reportUnusedDisableDirectives: 'off' },
     settings: {
+      // Without these, import-x treats a .ts import as a file it cannot parse
+      // and follows nothing through it - every TS cycle passes unseen.
+      'import-x/extensions': ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'],
+      'import-x/parsers': { '@typescript-eslint/parser': ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'] },
       'import-x/resolver-next': [createTypeScriptImportResolver({ alwaysTryTypes: true, project: process.cwd() })],
     },
     rules: { 'import-x/no-cycle': ['error', { ignoreExternal: true }] },

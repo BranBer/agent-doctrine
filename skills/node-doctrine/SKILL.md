@@ -95,5 +95,5 @@ sizes, secrets and dependency scans. Type checking needs the project's own
 
 ```bash
 grep -rnE "from ['\"](express|fastify|hono|koa)" src/domain src/services
-grep -rnE "from ['\"].*/data/" src/routes
+grep -rnE "from ['\"].*/data(/|['\"])" src/routes
 ```

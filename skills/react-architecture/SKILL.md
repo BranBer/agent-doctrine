@@ -1,6 +1,6 @@
 ---
 name: react-architecture
-description: Copy-paste templates for React file and folder conventions - creating or refactoring a component, hook, provider or context, splitting a .tsx/.ts file past 200 lines, extracting a list row, and wiring the `@/` path alias. Use whenever adding, moving or splitting a component/hook/provider in a React project, or deciding where extracted logic belongs.
+description: Copy-paste templates for React file and folder conventions - creating or refactoring a component, hook, provider or context, splitting a component past 200 code lines or any other file past 400, extracting a list row, and wiring the `@/` path alias. Use whenever adding, moving or splitting a component/hook/provider in a React project, or deciding where extracted logic belongs.
 ---
 
 # React architecture
@@ -86,7 +86,7 @@ then `summary={renderSummary}`. Before adding `useCallback`, name which of the
 doctrine's three cases it serves (a `memo` child, a hook dependency, a hook's
 or context's return). None applies? Leave it a plain `const`.
 
-## Splitting a file over 200 lines
+## Splitting a component over 200 lines (any other file over 400)
 
 1. Pull hook clusters out first (see below) - usually enough on its own.
 2. Still long? Cut the JSX at its seams.
@@ -134,9 +134,9 @@ export function useDrawer(initial = false): UseDrawer {
 Placement: used by one component → inside that component's folder
 (`Card/useCardMetrics/`). Used by two or more → `src/hooks/`.
 
-Hook past 200 lines → the pure parts (no React) move to `src/utils/`:
-- one function, one file: `src/utils/formatCurrency.ts`
-- a related set used together: `src/utils/dates/{parse.ts,format.ts,index.ts}`
+Hook past 400 code lines → the pure parts (no React) move to `src/utils/`:
+- into the file for their subject: `formatCurrency` lives in `src/utils/money.ts`, not a file of its own
+- a subject that grows a second file becomes a folder with a barrel: `src/utils/dates/{parse.ts,format.ts,index.ts}`
 
 `src/utils/` is exempt from the folder-per-thing rule. Don't build
 `src/utils/formatCurrency/formatCurrency.ts`.
@@ -238,7 +238,7 @@ Anything crossing a folder boundary uses `@/`.
 
 ## Before you call it done
 
-- [ ] no file over 200 lines
+- [ ] no component over 200 code lines, no other file over 400
 - [ ] every component/hook/provider folder has an `index.ts`
 - [ ] props typed in a sibling `types.ts`, imported with `import type`
 - [ ] no `../` chains in imports

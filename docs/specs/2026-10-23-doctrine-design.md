@@ -214,7 +214,7 @@ reported with its one-line install command, not treated as a failure.
 
 | Area | Tool | Stacks | Gate or read |
 |---|---|---|---|
-| Types | `tsc --noEmit` (or the project's `build`); pyright | TS; Python | gate where the project has a config, else read |
+| Types | the project's `typecheck` script, else `tsc --noEmit` on each config (a Vite-style root's references); pyright | TS; Python | gate where the project has a config, else read |
 | Lint and smells | ESLint + typescript-eslint + SonarJS rules; ruff (with its bandit `S` security rules and `C90` complexity) | TS; Python | read |
 | Import cycles | ESLint `import-x/no-cycle`; ruff has none, so a small Python import scan | TS; Python | gate |
 | Unused code | knip; vulture | TS; Python | read |

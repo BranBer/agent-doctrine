@@ -44,17 +44,24 @@ for (const step of steps(root, stacks)) {
     summary.push({ ...step, status: 'SKIP' });
     continue;
   }
-  const r = spawnSync(step.cmd, step.args, {
+  // Windows runs npm, uvx and the .cmd shims through a shell, which splits an
+  // unquoted path at its spaces; so the command is one string with those parts
+  // quoted. Only those: a quoted bare `"npm"` makes npm.cmd look for its own
+  // files in the project folder.
+  const shell = process.platform === 'win32' && step.cmd !== process.execPath;
+  const quote = (part) => (/[\s&|<>^()"]/.test(part) ? `"${part.replaceAll('"', '\\"')}"` : part);
+  const options = {
     cwd: step.cwd,
     stdio: step.summary ? ['ignore', 'pipe', 'inherit'] : 'inherit',
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
-    // Windows runs npm, uvx and the .cmd shims through a shell; node itself must not be.
-    shell: process.platform === 'win32' && step.cmd !== process.execPath,
     env: { ...process.env, ...step.env },
-  });
-  if (step.summary) summarize(step.summary, r.stdout ?? '', root);
-  const ok = r.status === 0;
+  };
+  const r = shell
+    ? spawnSync([step.cmd, ...step.args].map(quote).join(' '), { ...options, shell: true })
+    : spawnSync(step.cmd, step.args, options);
+  const decided = step.summary ? summarize(step.summary, r.stdout ?? '', root) : {};
+  const ok = decided.ok ?? r.status === 0;
   summary.push({ ...step, status: ok ? 'PASS' : step.gate ? 'FAIL' : 'READ' });
 }
 

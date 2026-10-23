@@ -268,8 +268,10 @@ What a reviewer checks, and the bad split each question catches:
 | Folders | a drawer, or bloat | Is anything in `misc`, `helpers` or `common`? Is there a folder holding one file? |
 
 **Listing files by size** takes one command per stack, run from the project
-root. Generated files and data tables show up too; check their header before
-calling them over.
+root. They are a quick count and read slightly high - docstrings and the inside
+of block comments count as code here - and generated files and data tables
+show up too. `health`'s file-size step is the exact count, with exemptions and
+waivers applied.
 
 TypeScript / JavaScript:
 
@@ -285,5 +287,5 @@ find . \( -name .venv -o -name venv -o -name __pycache__ -o -name .git -o -name 
   | while read -r f; do printf '%6d %s\n' "$(grep -cvE '^\s*($|#)' "$f")" "$f"; done | sort -rn | head -20
 ```
 
-The `health` skill runs these, plus the project's linters and scanners, in one
-pass.
+The `health` skill runs the exact count, plus the project's linters and
+scanners, in one pass.
