@@ -1,0 +1,18 @@
+{
+  "name": "react-health",
+  "private": true,
+  "type": "module",
+  "description": "Code-health, antipattern and accessibility checks for React projects. Kept outside every app so no project ships these dependencies.",
+  "dependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-you-might-not-need-an-effect": "^1.0.2",
+    "eslint-plugin-sonarjs": "^4.2.1",
+    "knip": "^6.0.0",
+    "oxlint": "^1.79.0",
+    "playwright": "^1.62.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.0"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "react-cross-browser",
+  "private": true,
+  "type": "module",
+  "description": "Cross-engine and pixel checks for web projects. Kept outside every app so no project ships a browser dependency for its own QA.",
+  "dependencies": {
+    "playwright": "^1.62.1"
+  }
+}
