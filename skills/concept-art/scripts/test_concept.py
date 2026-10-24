@@ -41,6 +41,16 @@ assert files == ["art/concept/t-1.png"] and os.path.exists(os.path.join(TMP, fil
 log = [json.loads(l) for l in open(os.path.join(TMP, "art", "provenance.jsonl"), encoding="utf8")]
 assert log[-1]["model"] == concept.MODELS[1] and log[-1]["usage"]["cost"] == 0.1, log[-1]
 
+# each written file is logged with its sha256, so provenance can prove which bytes a pick refers to
+import hashlib
+assert log[-1]["sha256"] == {"art/concept/t-1.png": hashlib.sha256(base64.b64decode(png)).hexdigest()}, log[-1]
+
+# a dry run returns the request body and writes and spends nothing
+before = open(os.path.join(TMP, "art", "provenance.jsonl"), encoding="utf8").read()
+body = concept.dry_run("p", None, "16:9", [ref])
+assert body["model"] == concept.MODELS[0] and body["messages"][0]["content"][1]["type"] == "image_url", body
+assert open(os.path.join(TMP, "art", "provenance.jsonl"), encoding="utf8").read() == before
+
 # a second run never overwrites the first
 assert concept.generate("t", "p", post=fake) == ["art/concept/t-2.png"]
 

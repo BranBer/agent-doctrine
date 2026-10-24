@@ -33,6 +33,8 @@ Per view:
   h_err      the same for height
   edge_mean  mean distance between the two outlines, as a share of the view's longer side
   edge_p95   95th-percentile distance, as a share; a high value with a good mean is one bad part
+  hull       the concept view against its own convex hull: the IoU a featureless blob would score.
+             Where iou is not clearly above hull, that view can't tell a right model from a wrong one
   dE         median colour difference (CIE76) between concept and unlit model where both overlap
   flip       the mirroring that matched best; anything but "none" means the model faces the other way
 
@@ -202,7 +204,10 @@ def compare_view(name, v, scale, outline):
     concept = place(shape, v["concept"], bottom)
     core = cv2.erode((C & M).astype(np.uint8), np.ones((7, 7), np.uint8)) > 0
     dE = float(np.median(np.linalg.norm(lab(concept)[core] - lab(FLAT[..., :3])[core], axis=1))) if core.any() else float("nan")
-    metrics = {"iou": round(iou, 4), "w_err": round((bw - cw) / cw, 4), "h_err": round((bh - ch) / ch, 4),
+    hull = np.zeros(v["cmask"].shape, np.uint8)
+    cv2.fillPoly(hull, [cv2.convexHull(cv2.findNonZero(v["cmask"].astype(np.uint8)))], 1)
+    metrics = {"iou": round(iou, 4), "hull": round(float(v["cmask"].sum() / max(1, hull.sum())), 4),
+               "w_err": round((bw - cw) / cw, 4), "h_err": round((bh - ch) / ch, 4),
                "edge_mean": round(mean / longer, 4), "edge_p95": round(p95 / longer, 4), "dE": round(dE, 2), "flip": flip}
     return metrics, panels(v, shape, concept, C, M, LIT)
 
@@ -284,13 +289,13 @@ def main(a):
     min_iou, max_size, max_p95 = float(opt("--min-iou", 0.94)), float(opt("--max-size", 0.03)), float(opt("--max-p95", 0.03))
     gated = opt("--gate", ",".join(r["views"])).split(",")
     failed = []
-    print("%-6s %6s %7s %7s %6s %6s %5s %-5s %s" % ("view", "IoU", "w", "h", "edge", "p95", "dE", "flip", "gate"))
+    print("%-6s %6s %6s %7s %7s %6s %6s %5s %-5s %s" % ("view", "IoU", "hull", "w", "h", "edge", "p95", "dE", "flip", "gate"))
     for name, m in r["views"].items():
         ok = m["iou"] >= min_iou and max(abs(m["w_err"]), abs(m["h_err"])) <= max_size and m["edge_p95"] <= max_p95
         if name in gated and not ok:
             failed.append(name)
-        print("%-6s %6.3f %+6.1f%% %+6.1f%% %5.1f%% %5.1f%% %5.1f %-5s %s" % (
-            name, m["iou"], 100 * m["w_err"], 100 * m["h_err"], 100 * m["edge_mean"], 100 * m["edge_p95"], m["dE"], m["flip"],
+        print("%-6s %6.3f %6.3f %+6.1f%% %+6.1f%% %5.1f%% %5.1f%% %5.1f %-5s %s" % (
+            name, m["iou"], m["hull"], 100 * m["w_err"], 100 * m["h_err"], 100 * m["edge_mean"], 100 * m["edge_p95"], m["dE"], m["flip"],
             ("PASS" if ok else "FAIL") if name in gated else "(not gated)"))
     for axis, spread in r["consistency"].items():
         print("concept %s spread across views: %.1f%%%s" % (axis, 100 * spread, "  <- the sheet disagrees with itself" if spread > 0.03 else ""))

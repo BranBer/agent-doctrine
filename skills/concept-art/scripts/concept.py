@@ -1,16 +1,16 @@
 """Concept art via OpenRouter, for any project. Reference only: concepts never ship in a build.
 
-  python -I concept.py <slug> "<prompt>" [--n 2] [--model M] [--aspect 16:9] [--ref art/concept/x.png]...
+  python -I concept.py <slug> "<prompt>" [--n 2] [--model M] [--aspect 16:9] [--ref art/concept/x.png]... [--dry-run]
   python -I concept.py pick <file> "<one-sentence reason>"
 
 Run from the project root (or set CONCEPT_ROOT). The project's rendering rules live in
 art/house-style.md and are appended to every prompt, so every concept shares one look. Writes
-art/concept/<slug>-N.png, numbering on from any earlier run, and appends every call and every pick to
-art/provenance.jsonl. With no --model, MODELS are tried in order, moving on only when one is
+art/concept/<slug>-N.png, numbering on from any earlier run, and appends every call (with each file's
+sha256) and every pick to art/provenance.jsonl. --dry-run prints the request instead of sending it. With no --model, MODELS are tried in order, moving on only when one is
 rate-limited or unavailable. The key comes from OPEN_ROUTER_API_KEY in the environment, else the
 Windows user environment, and is never printed.
 """
-import base64, datetime, glob, json, os, re, sys, urllib.error, urllib.request
+import base64, datetime, glob, hashlib, json, os, re, sys, urllib.error, urllib.request
 
 ROOT = os.environ.get("CONCEPT_ROOT") or os.getcwd()
 OUT = os.path.join(ROOT, "art", "concept")
@@ -92,19 +92,25 @@ def generate(slug, prompt, n=1, model=None, aspect="16:9", refs=(), post=None):
             continue
         msg = d["choices"][0]["message"]
         i = next_index(slug)
-        files = []
+        files, hashes = [], {}
         for k, img in enumerate(msg.get("images") or []):
             raw = base64.b64decode(img["image_url"]["url"].split(",", 1)[1])
             p = os.path.join(OUT, "%s-%d%s.png" % (slug, i, chr(97 + k) if k else ""))
             open(p, "wb").write(raw)
             files.append(os.path.relpath(p, ROOT).replace("\\", "/"))
+            hashes[files[-1]] = hashlib.sha256(raw).hexdigest()
         if not files:
             print("no image returned:", (msg.get("content") or "")[:300])
         log({"slug": slug, "model": used, "aspect": aspect, "refs": list(refs),
              "prompt": build_body(prompt, used, aspect, [])["messages"][0]["content"][0]["text"],
-             "files": files, "usage": d.get("usage")})
+             "files": files, "sha256": hashes, "usage": d.get("usage")})
         written += files
     return written
+
+
+def dry_run(prompt, model, aspect, refs):
+    """The request that would be sent first, for reviewing a prompt without spending anything."""
+    return build_body(prompt, model or MODELS[0], aspect, refs)
 
 
 def pick(file, reason):
@@ -120,5 +126,12 @@ if __name__ == "__main__":
         raise SystemExit(__doc__)
     opt = lambda name, default: a[a.index(name) + 1] if name in a else default
     refs = [a[i + 1] for i, x in enumerate(a) if x == "--ref"]
+    if "--dry-run" in a:
+        body = dry_run(a[1], opt("--model", None), opt("--aspect", "16:9"), refs)
+        for part in body["messages"][0]["content"]:
+            if part["type"] == "image_url":
+                part["image_url"]["url"] = part["image_url"]["url"][:40] + "..."
+        print(json.dumps(body, indent=2))
+        raise SystemExit(0)
     for p in generate(a[0], a[1], int(opt("--n", 1)), opt("--model", None), opt("--aspect", "16:9"), refs):
         print("wrote", p)

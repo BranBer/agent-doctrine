@@ -76,6 +76,8 @@ for v in ("side", "front"):
     assert m["flip"] == "none", (v, m)
     assert m["edge_mean"] < 0.01, (v, m)
 assert r["views"]["side"]["dE"] < 8, r["views"]["side"]
+# the hull floor: the concept against its own convex hull; the stepped side profile sits well under 1
+assert 0.85 < r["views"]["side"]["hull"] < 0.99 and r["views"]["side"]["iou"] > r["views"]["side"]["hull"], r["views"]["side"]
 assert os.path.exists(os.path.join(T, "out-good", "sheet.png"))
 assert r["consistency"]["H"] < 0.02, r["consistency"]
 

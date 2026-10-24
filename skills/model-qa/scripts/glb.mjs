@@ -1,6 +1,6 @@
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 /* Exports a code-built three.js model to GLB, so views.mjs can render it.
@@ -41,6 +41,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     process.exit(2);
   }
   const object = await build(flag('args') === undefined ? undefined : JSON.parse(flag('args')));
+  mkdirSync(dirname(resolve(out)), { recursive: true });
   writeFileSync(out, await toGLB(object, file));
   console.log(`wrote ${out}`);
 }

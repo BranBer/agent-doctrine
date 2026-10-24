@@ -7,7 +7,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 T = tempfile.mkdtemp()
-glb, out = os.path.join(T, "box.glb"), os.path.join(T, "views")
+glb, out = os.path.join(T, "not", "yet", "box.glb"), os.path.join(T, "views")  # glb.mjs makes its folder
 
 subprocess.run(["node", os.path.join(HERE, "glb.mjs"), os.path.join(HERE, "fixtures", "box.mjs"), glb], check=True)
 assert open(glb, "rb").read(4) == b"glTF"
@@ -17,6 +17,7 @@ meta = json.load(open(os.path.join(out, "views.json")))
 d = meta["dims"]
 assert abs(d["x"] - 1) < 1e-3 and abs(d["y"] - 2.5) < 1e-3 and abs(d["z"] - 4) < 1e-3, d
 ppu = meta["pxPerUnit"]
+assert meta["triangles"] == 24 and meta["meshes"] == 2, (meta["triangles"], meta["meshes"])  # two boxes
 
 
 def bbox(view):

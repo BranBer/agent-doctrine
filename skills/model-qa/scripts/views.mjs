@@ -72,6 +72,7 @@ window.renderViews = async (size, views) => {
 
   const meshes = [];
   root.traverse((o) => o.isMesh && meshes.push(o));
+  const triangles = meshes.reduce((n, m) => n + (m.geometry.index ?? m.geometry.attributes.position).count / 3, 0);
   const flat = new Map(meshes.map((m) => [m, [m.material].flat().map((mat) => new THREE.MeshBasicMaterial({
     color: mat.color, vertexColors: mat.vertexColors, map: mat.map ?? null, side: mat.side,
     transparent: mat.transparent, opacity: mat.opacity,
@@ -94,7 +95,7 @@ window.renderViews = async (size, views) => {
     meshes.forEach((m, i) => { m.material = own[i]; });
     images[name] = { lit, unlit };
   }
-  return { pxPerUnit, dims: { x: dims.x, y: dims.y, z: dims.z }, images };
+  return { pxPerUnit, dims: { x: dims.x, y: dims.y, z: dims.z }, triangles, meshes: meshes.length, images };
 };
 window.ready = true;
 </script>`;
@@ -128,7 +129,10 @@ export async function renderViews(modelPath, outDir, { size = 1024, views = Obje
       writeFileSync(join(outDir, `${name}.png`), png(lit));
       writeFileSync(join(outDir, `${name}.flat.png`), png(unlit));
     }
-    const meta = { model: modelPath, size, pxPerUnit: result.pxPerUnit, dims: result.dims, views: picked };
+    const meta = {
+      model: modelPath, size, pxPerUnit: result.pxPerUnit, dims: result.dims,
+      triangles: result.triangles, meshes: result.meshes, views: picked,
+    };
     writeFileSync(join(outDir, 'views.json'), JSON.stringify(meta, null, 2) + '\n');
     return meta;
   } finally {
@@ -146,5 +150,5 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   }
   const meta = await renderViews(model, out, { size: Number(flag('size', 1024)), views: flag('views', Object.keys(VIEWS).join(',')).split(',') });
   const { x, y, z } = meta.dims;
-  console.log(`wrote ${Object.keys(meta.views).join(', ')} to ${out} (model ${x.toFixed(3)} wide x ${y.toFixed(3)} tall x ${z.toFixed(3)} long, ${meta.pxPerUnit.toFixed(2)} px/unit)`);
+  console.log(`wrote ${Object.keys(meta.views).join(', ')} to ${out} (model ${x.toFixed(3)} wide x ${y.toFixed(3)} tall x ${z.toFixed(3)} long, ${meta.triangles} triangles in ${meta.meshes} meshes, ${meta.pxPerUnit.toFixed(2)} px/unit)`);
 }

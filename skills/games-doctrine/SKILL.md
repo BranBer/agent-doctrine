@@ -116,6 +116,10 @@ legibility at DPR 1, ad timing, progress save and covers. Load the portal's
 publishing skill before writing the game, not just before submitting it. For
 CrazyGames, that is `crazygames-publishing`. Each rule there becomes a test.
 
+Art follows the same order. Make concepts and orthographic sheets with `concept-art`, which
+keeps AI images out of the build. Check every model against its sheet with `model-qa` before
+calling it done.
+
 ## The legitimate big files
 
 - **Generated level tables** - a script writes a year of daily levels into one
