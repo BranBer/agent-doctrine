@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { SKIP_DIRS } from './stacks.mjs';
 
 /* Lists hand-written files over the doctrine's size limits.
@@ -116,7 +116,8 @@ export function oversized(root, reactDirs = []) {
   return over.sort((a, b) => b.lines - a.lines);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Real paths: ~/.claude/skills reaches this script through a link that argv[1] keeps.
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   const args = process.argv.slice(2);
   const reactDirs = args.flatMap((a, i) => (args[i - 1] === '--react' ? [a] : []));
   const root = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--react') ?? '.';

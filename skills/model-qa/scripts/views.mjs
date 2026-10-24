@@ -1,11 +1,11 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
 /* Orthographic renders of a GLB from the views a concept sheet shows.
 
-     node views.mjs <model.glb> <out-dir> [--size 1024] [--views side,front,back,top,hero]
+     node views.mjs <model.glb> <out-dir> [--size 1024] [--views side,front,back,top,hero] [--hero 1,0.6,1.1]
 
    The model is read in the glTF frame: +Y up, nose toward +Z. Every view uses
    one shared scale (pxPerUnit in views.json), so proportions between views are
@@ -16,7 +16,8 @@ import { chromium } from 'playwright';
      back   from -Z: width across, height up
      top    from +Y: nose points left, length across, width up
      hero   a perspective three-quarter view from the front left, above; for
-            people to judge, never scored (perspective has no shared scale)
+            people to judge, never scored (perspective has no shared scale).
+            --hero x,y,z sets its direction, to match a hero concept's angle
 
    Each view writes <view>.png (lit by a fixed top-left key light, for looking
    at) and <view>.flat.png (unlit base colours, for colour checks), both on a
@@ -81,8 +82,10 @@ window.renderViews = async (size, views) => {
   const images = {};
   for (const [name, v] of Object.entries(views)) {
     const camera = v.perspective ? perspective : ortho;
-    // Far enough that the longest side fills about FILL of the frame either way.
-    const distance = v.perspective ? longest / FILL / (2 * Math.tan(THREE.MathUtils.degToRad(FOV / 2))) : longest * 3;
+    // Orthographic: well clear of the model. Perspective: the bounding sphere fits the frame from any
+    // direction, which framing on the longest side does not (a cube's diagonal is 1.73 times its side).
+    const radius = dims.length() / 2;
+    const distance = v.perspective ? radius / Math.sin(THREE.MathUtils.degToRad(FOV / 2)) / FILL : longest * 3;
     camera.position.copy(centre).addScaledVector(new THREE.Vector3(...v.dir).normalize(), distance);
     camera.up.set(...v.up);
     camera.lookAt(centre);
@@ -100,7 +103,7 @@ window.renderViews = async (size, views) => {
 window.ready = true;
 </script>`;
 
-export async function renderViews(modelPath, outDir, { size = 1024, views = Object.keys(VIEWS) } = {}) {
+export async function renderViews(modelPath, outDir, { size = 1024, views = Object.keys(VIEWS), hero } = {}) {
   const unknown = views.filter((v) => !VIEWS[v]);
   if (unknown.length) throw new Error(`unknown view ${unknown.join(', ')}; known: ${Object.keys(VIEWS).join(', ')}`);
   const browser = await chromium.launch();
@@ -121,7 +124,7 @@ export async function renderViews(modelPath, outDir, { size = 1024, views = Obje
     await page.waitForFunction(() => window.ready || false, null, { timeout: 30_000 }).catch(() => {
       throw new Error(`render page did not start: ${errors.join('; ') || 'no error reported'}`);
     });
-    const picked = Object.fromEntries(views.map((v) => [v, VIEWS[v]]));
+    const picked = Object.fromEntries(views.map((v) => [v, v === 'hero' && hero ? { ...VIEWS.hero, dir: hero } : VIEWS[v]]));
     const result = await page.evaluate(([s, v]) => window.renderViews(s, v), [size, picked]);
     mkdirSync(outDir, { recursive: true });
     const png = (dataUrl) => Buffer.from(dataUrl.split(',', 2)[1], 'base64');
@@ -140,15 +143,21 @@ export async function renderViews(modelPath, outDir, { size = 1024, views = Obje
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Compare real paths: ~/.claude/skills reaches these scripts through a link, and argv[1] keeps
+// the link's path while import.meta.url resolves it.
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   const args = process.argv.slice(2);
   const flag = (name, fallback) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : fallback);
   const [model, out] = args.filter((a, i) => !a.startsWith('--') && !args[i - 1]?.startsWith('--'));
   if (!model || !out) {
-    console.error('usage: node views.mjs <model.glb> <out-dir> [--size 1024] [--views side,front,back,top,hero]');
+    console.error('usage: node views.mjs <model.glb> <out-dir> [--size 1024] [--views side,front,back,top,hero] [--hero x,y,z]');
     process.exit(2);
   }
-  const meta = await renderViews(model, out, { size: Number(flag('size', 1024)), views: flag('views', Object.keys(VIEWS).join(',')).split(',') });
+  const meta = await renderViews(model, out, {
+    size: Number(flag('size', 1024)),
+    views: flag('views', Object.keys(VIEWS).join(',')).split(','),
+    hero: flag('hero', undefined)?.split(',').map(Number),
+  });
   const { x, y, z } = meta.dims;
   console.log(`wrote ${Object.keys(meta.views).join(', ')} to ${out} (model ${x.toFixed(3)} wide x ${y.toFixed(3)} tall x ${z.toFixed(3)} long, ${meta.triangles} triangles in ${meta.meshes} meshes, ${meta.pxPerUnit.toFixed(2)} px/unit)`);
 }

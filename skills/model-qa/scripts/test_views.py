@@ -5,11 +5,19 @@ import json, os, subprocess, tempfile
 import cv2
 import numpy as np
 
-HERE = os.path.dirname(os.path.abspath(__file__))
 T = tempfile.mkdtemp()
+# Run the scripts through a link, the way ~/.claude/skills reaches them: a main-module check that
+# compares the link's path with the real one makes every script exit 0 having done nothing.
+REAL = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.join(T, "linked-scripts")
+if os.name == "nt":
+    import _winapi
+    _winapi.CreateJunction(REAL, HERE)
+else:
+    os.symlink(REAL, HERE)
 glb, out = os.path.join(T, "not", "yet", "box.glb"), os.path.join(T, "views")  # glb.mjs makes its folder
 
-subprocess.run(["node", os.path.join(HERE, "glb.mjs"), os.path.join(HERE, "fixtures", "box.mjs"), glb], check=True)
+subprocess.run(["node", os.path.join(HERE, "glb.mjs"), os.path.join(REAL, "fixtures", "box.mjs"), glb], check=True)
 assert open(glb, "rb").read(4) == b"glTF"
 subprocess.run(["node", os.path.join(HERE, "views.mjs"), glb, out, "--size", "512"], check=True)
 
@@ -46,6 +54,13 @@ for view in ("side", "top"):
 # a perspective three-quarter hero view comes with every run, for people to look at
 hero = cv2.imread(os.path.join(out, "hero.png"), cv2.IMREAD_UNCHANGED)
 assert hero is not None and (hero[..., 3] > 127).mean() > 0.05, "hero view missing or empty"
+# the hero frames the whole model, even a cube whose diagonal is far longer than its longest side
+cube_glb, cube_out = os.path.join(T, "cube.glb"), os.path.join(T, "cube")
+subprocess.run(["node", os.path.join(HERE, "glb.mjs"), os.path.join(REAL, "fixtures", "cube.mjs"), cube_glb], check=True)
+subprocess.run(["node", os.path.join(HERE, "views.mjs"), cube_glb, cube_out, "--size", "256", "--views", "hero"], check=True)
+a = cv2.imread(os.path.join(cube_out, "hero.png"), cv2.IMREAD_UNCHANGED)[..., 3]
+ys, xs = np.nonzero(a > 0)
+assert ys.min() > 2 and xs.min() > 2 and ys.max() < a.shape[0] - 3 and xs.max() < a.shape[1] - 3, "hero view crops the model"
 assert "hero" not in [v for v in meta["views"] if not meta["views"][v].get("perspective")]
 
 # the unlit pass keeps the material's own colour (#3D63DD)

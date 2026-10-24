@@ -3,7 +3,8 @@
   python -I compare.py components <sheet.png> [--tol 10]
   python -I compare.py check <concept.json> [--outline 0]
   python -I compare.py <concept.json> <renders-dir> <out-dir> [--ref side:w] [--outline 0]
-                       [--min-iou 0.94] [--max-size 0.03] [--max-p95 0.03] [--gate side,front,top]
+                       [--min-iou 0.94] [--max-size 0.03] [--max-p95 0.03] [--max-colour 1] [--gate side,front,top]
+                       [--bar bar.json]
 
 `components` lists the separate drawings on a sheet, largest first, and writes <sheet>-components.png
 with each one boxed and numbered, so the views can be named in concept.json:
@@ -36,11 +37,14 @@ Per view:
   hull       the concept view against its own convex hull: the IoU a featureless blob would score.
              Where iou is not clearly above hull, that view can't tell a right model from a wrong one
   dE         median colour difference (CIE76) between concept and unlit model where both overlap
+  colour_miss  share of the overlap whose colour differs by more than 25: the measure that sees a
+             missing or wrong surface panel (door, window, decal), which no silhouette can
   flip       the mirroring that matched best; anything but "none" means the model faces the other way
 
 consistency checks the concept against itself: the spread of length (L), width (W) and height (H)
-across the views that show each one. A spread over 3% means the sheet disagrees with itself; model
-against the side view, or regenerate the sheet.
+across the views that show each one. `check` names any view more than 3% from the median (leave it
+out of --gate) and exits 1 only when side and front, the master views, disagree on height by more
+than 5%, which needs a new sheet.
 """
 import json, os, sys
 
@@ -50,6 +54,8 @@ import numpy as np
 AXES = {"side": ("L", "H"), "top": ("L", "W"), "front": ("W", "H"), "back": ("W", "H")}
 FLIPS = {"none": None, "h": 1, "v": 0, "hv": -1}
 PAD = 24
+# A colour this far off (CIE76) is a different paint, not shading: a wrong or missing panel.
+COLOUR_MISS_DE = 25
 RED, BLUE, GREY = (60, 60, 230), (230, 120, 40), (150, 150, 150)
 
 
@@ -65,14 +71,17 @@ def fill_from_border(bg_like):
     return ~np.isin(labels, edge[edge > 0])
 
 
-def keep_large(mask, share=0.01):
-    """Drops specks smaller than `share` of the largest piece."""
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(mask.astype(np.uint8), connectivity=8)
+def keep_large(mask, share=0.05, bridge=5):
+    """Drops pieces smaller than `share` of the largest, such as a sheet's labels. Pieces within
+    `bridge` px of each other count as one, so a knob a hairline from its rod joins the body, while a
+    label's letters join only each other and still fall under `share` as a word."""
+    joined = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((bridge, bridge), np.uint8))
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(joined, connectivity=8)
     if n <= 1:
         return mask
     areas = stats[1:, cv2.CC_STAT_AREA]
     big = 1 + np.flatnonzero(areas >= areas.max() * share)
-    return np.isin(labels, big)
+    return mask & np.isin(labels, big)
 
 
 def concept_mask(bgr, tol=10.0):
@@ -83,7 +92,8 @@ def concept_mask(bgr, tol=10.0):
 
 
 def render_mask(rgba):
-    return keep_large(fill_from_border(rgba[..., 3] < 128))
+    # Every rendered piece counts: renders carry no labels, and dropping a piece would hide an error.
+    return fill_from_border(rgba[..., 3] < 128)
 
 
 def bbox(mask):
@@ -203,12 +213,15 @@ def compare_view(name, v, scale, outline):
     longer = max(ch, cw)
     concept = place(shape, v["concept"], bottom)
     core = cv2.erode((C & M).astype(np.uint8), np.ones((7, 7), np.uint8)) > 0
-    dE = float(np.median(np.linalg.norm(lab(concept)[core] - lab(FLAT[..., :3])[core], axis=1))) if core.any() else float("nan")
+    diff = np.linalg.norm(lab(concept)[core] - lab(FLAT[..., :3])[core], axis=1) if core.any() else np.array([np.nan])
+    dE = float(np.median(diff))
+    colour_miss = float((diff > COLOUR_MISS_DE).mean())
     hull = np.zeros(v["cmask"].shape, np.uint8)
     cv2.fillPoly(hull, [cv2.convexHull(cv2.findNonZero(v["cmask"].astype(np.uint8)))], 1)
     metrics = {"iou": round(iou, 4), "hull": round(float(v["cmask"].sum() / max(1, hull.sum())), 4),
                "w_err": round((bw - cw) / cw, 4), "h_err": round((bh - ch) / ch, 4),
-               "edge_mean": round(mean / longer, 4), "edge_p95": round(p95 / longer, 4), "dE": round(dE, 2), "flip": flip}
+               "edge_mean": round(mean / longer, 4), "edge_p95": round(p95 / longer, 4), "dE": round(dE, 2),
+               "colour_miss": round(colour_miss, 4), "flip": flip}
     return metrics, panels(v, shape, concept, C, M, LIT)
 
 
@@ -279,23 +292,37 @@ def main(a):
                   if any(a in s for s in sizes.values())}
         for name, s in sizes.items():
             print("%-6s " % name + ", ".join("%s %d px (%+.1f%% from median)" % (a, s[a], 100 * (s[a] / median[a] - 1)) for a in s))
-        spreads = check(pos[1], outline)
-        for axis, spread in spreads.items():
-            print("%s spread across views: %.1f%%%s" % (axis, 100 * spread, "  <- the sheet disagrees with itself" if spread > 0.03 else ""))
-        return 1 if any(s > 0.03 for s in spreads.values()) else 0
+        for axis, spread in check(pos[1], outline).items():
+            print("%s spread across views: %.1f%%" % (axis, 100 * spread))
+        drifting = [n for n, s in sizes.items() if any(abs(s[a] / median[a] - 1) > 0.03 for a in s)]
+        if drifting:
+            print("drifting (over 3%% from the median): %s; leave it out of --gate" % ", ".join(drifting))
+        # Side and front are the masters; when they disagree on height the sheet can't be modelled from.
+        if "side" in sizes and "front" in sizes:
+            gap = abs(sizes["side"]["H"] - sizes["front"]["H"]) / np.mean([sizes["side"]["H"], sizes["front"]["H"]])
+            if gap > 0.05:
+                print("side and front heights differ by %.1f%%: get a new sheet" % (100 * gap))
+                return 1
+        return 0
     if len(pos) != 3:
         raise SystemExit(__doc__)
     r = compare(*pos, ref=opt("--ref", "side:w"), outline=int(opt("--outline", 0)))
     min_iou, max_size, max_p95 = float(opt("--min-iou", 0.94)), float(opt("--max-size", 0.03)), float(opt("--max-p95", 0.03))
-    gated = opt("--gate", ",".join(r["views"])).split(",")
+    max_colour = float(opt("--max-colour", 1))
+    # --bar: per-view limits written by calibrate.mjs; its views are the gated ones unless --gate says.
+    bar = json.load(open(opt("--bar", ""), encoding="utf8")) if "--bar" in a else {}
+    gated = opt("--gate", ",".join(bar or r["views"])).split(",")
     failed = []
-    print("%-6s %6s %6s %7s %7s %6s %6s %5s %-5s %s" % ("view", "IoU", "hull", "w", "h", "edge", "p95", "dE", "flip", "gate"))
+    print("%-6s %6s %6s %7s %7s %6s %6s %5s %6s %-5s %s" % ("view", "IoU", "hull", "w", "h", "edge", "p95", "dE", "cmiss", "flip", "gate"))
     for name, m in r["views"].items():
-        ok = m["iou"] >= min_iou and max(abs(m["w_err"]), abs(m["h_err"])) <= max_size and m["edge_p95"] <= max_p95
+        b = bar.get(name, {"min_iou": min_iou, "max_size": max_size, "max_p95": max_p95, "max_colour": max_colour})
+        ok = (m["iou"] >= b["min_iou"] and max(abs(m["w_err"]), abs(m["h_err"])) <= b["max_size"] and m["edge_p95"] <= b["max_p95"]
+              and m["colour_miss"] <= b["max_colour"])
         if name in gated and not ok:
             failed.append(name)
-        print("%-6s %6.3f %6.3f %+6.1f%% %+6.1f%% %5.1f%% %5.1f%% %5.1f %-5s %s" % (
-            name, m["iou"], m["hull"], 100 * m["w_err"], 100 * m["h_err"], 100 * m["edge_mean"], 100 * m["edge_p95"], m["dE"], m["flip"],
+        print("%-6s %6.3f %6.3f %+6.1f%% %+6.1f%% %5.1f%% %5.1f%% %5.1f %5.1f%% %-5s %s" % (
+            name, m["iou"], m["hull"], 100 * m["w_err"], 100 * m["h_err"], 100 * m["edge_mean"], 100 * m["edge_p95"], m["dE"],
+            100 * m["colour_miss"], m["flip"],
             ("PASS" if ok else "FAIL") if name in gated else "(not gated)"))
     for axis, spread in r["consistency"].items():
         print("concept %s spread across views: %.1f%%%s" % (axis, 100 * spread, "  <- the sheet disagrees with itself" if spread > 0.03 else ""))

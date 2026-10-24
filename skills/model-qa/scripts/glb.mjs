@@ -1,7 +1,7 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /* Exports a code-built three.js model to GLB, so views.mjs can render it.
 
@@ -26,7 +26,9 @@ export async function toGLB(object, from) {
   return Buffer.from(buffer);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Compare real paths: ~/.claude/skills reaches these scripts through a link, and argv[1] keeps
+// the link's path while import.meta.url resolves it.
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   const args = process.argv.slice(2);
   const flag = (name) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : undefined);
   const [modulePath, out] = args.filter((a, i) => !a.startsWith('--') && !args[i - 1]?.startsWith('--'));

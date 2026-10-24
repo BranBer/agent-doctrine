@@ -76,6 +76,9 @@ for v in ("side", "front"):
     assert m["flip"] == "none", (v, m)
     assert m["edge_mean"] < 0.01, (v, m)
 assert r["views"]["side"]["dE"] < 8, r["views"]["side"]
+# colour_miss: the share of overlap pixels whose colour is far off (CIE76 above 25); silhouettes
+# are blind to a wrong or missing surface panel, colour is not
+assert r["views"]["side"]["colour_miss"] < 0.03, r["views"]["side"]
 # the hull floor: the concept against its own convex hull; the stepped side profile sits well under 1
 assert 0.85 < r["views"]["side"]["hull"] < 0.99 and r["views"]["side"]["iou"] > r["views"]["side"]["hull"], r["views"]["side"]
 assert os.path.exists(os.path.join(T, "out-good", "sheet.png"))
@@ -85,6 +88,16 @@ assert r["consistency"]["H"] < 0.02, r["consistency"]
 iou = {o: compare.compare(os.path.join(T, "concept.json"), os.path.join(T, "good"), os.path.join(T, "o%d" % o),
                           outline=o)["views"]["side"]["iou"] for o in (2, 3, 4)}
 assert iou[3] >= iou[2] and iou[3] > iou[4], iou
+
+# a cab painted the wrong colour leaves the silhouette alone and shows in colour_miss
+renders(os.path.join(T, "repaint"))
+for f in ("side.png", "side.flat.png"):
+    img = cv2.imread(os.path.join(T, "repaint", f), cv2.IMREAD_UNCHANGED)
+    cab = (img[..., 3] > 0) & (np.arange(img.shape[0])[:, None] < 400 - 100)
+    img[cab, :3] = (138, 201, 54)  # mint over the cab
+    cv2.imwrite(os.path.join(T, "repaint", f), img)
+r = compare.compare(os.path.join(T, "concept.json"), os.path.join(T, "repaint"), os.path.join(T, "out-p"), outline=3)
+assert r["views"]["side"]["iou"] >= 0.985 and r["views"]["side"]["colour_miss"] > 0.1, r["views"]["side"]
 
 # a model built facing the other way is matched mirrored, and the mirror is reported
 renders(os.path.join(T, "mirrored"), side_kw={"nose_left": False})
@@ -113,9 +126,9 @@ failed = run("tall4", "o3")
 assert failed.returncode == 1 and "FAIL" in failed.stdout, failed.stdout
 assert run("tall4", "o3", "--gate", "front").returncode == 0
 
-# components finds both drawings and the label, largest first
+# components finds both drawings, largest first, and leaves the label out
 boxes = compare.components(os.path.join(T, "sheet.png"))
-assert len(boxes) >= 3, boxes
+assert len(boxes) == 2, boxes
 x, y, w, h = boxes[0]
 assert abs(x - 98) <= 4 and abs(w - 404) <= 6 and abs(h - 284) <= 6, boxes[0]
 
@@ -128,5 +141,28 @@ assert 0.05 < r["consistency"]["H"] < 0.10, r["consistency"]
 # check reads the same consistency from the sheet alone, before any model exists
 c = compare.check(os.path.join(T, "concept2.json"), outline=3)
 assert abs(c["H"] - r["consistency"]["H"]) < 1e-3, (c, r["consistency"])
+
+# the check command exits 1 only when a new sheet is needed: side and front disagreeing on height by
+# more than 5% (concept2's front is 10% taller); a sheet whose views agree exits 0
+chk = lambda cfg: subprocess.run([sys.executable, "-I", os.path.join(HERE, "compare.py"), "check", cfg, "--outline", "3"],
+                                 capture_output=True, text=True)
+assert chk(os.path.join(T, "concept.json")).returncode == 0
+bad = chk(os.path.join(T, "concept2.json"))
+assert bad.returncode == 1 and "new sheet" in bad.stdout, bad.stdout
+
+# a model render keeps every piece, however small or detached: a dropped piece would hide an error
+rgba = np.zeros((200, 200, 4), np.uint8)
+rgba[50:150, 20:180, 3] = 255
+rgba[30:34, 100:104, 3] = 255  # a 4 px antenna knob, 16 px clear of the body
+assert compare.render_mask(rgba)[31, 101], "a detached piece of the model was dropped"
+
+# the concept keeps a small piece a hairline from its part, and drops a label well clear of it
+img = np.full((200, 200, 3), BG, np.uint8)
+img[50:150, 20:180] = YELLOW
+img[46:49, 100:104] = YELLOW   # a knob 1 px above the body
+img[170:180, 60:64] = NAVY     # a label speck 20 px below it
+img[185:195, 100:180] = NAVY   # a whole word of label, its letters bridged into one piece, 15 px clear
+m, _ = compare.concept_mask(img)
+assert m[47, 101] and not m[175, 61] and not m[190, 140], (m[47, 101], m[175, 61], m[190, 140])
 
 print("ok")
