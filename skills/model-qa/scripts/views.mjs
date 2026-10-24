@@ -5,7 +5,7 @@ import { chromium } from 'playwright';
 
 /* Orthographic renders of a GLB from the views a concept sheet shows.
 
-     node views.mjs <model.glb> <out-dir> [--size 1024] [--views side,front,back,top]
+     node views.mjs <model.glb> <out-dir> [--size 1024] [--views side,front,back,top,hero]
 
    The model is read in the glTF frame: +Y up, nose toward +Z. Every view uses
    one shared scale (pxPerUnit in views.json), so proportions between views are
@@ -15,6 +15,8 @@ import { chromium } from 'playwright';
      front  from +Z: width across, height up
      back   from -Z: width across, height up
      top    from +Y: nose points left, length across, width up
+     hero   a perspective three-quarter view from the front left, above; for
+            people to judge, never scored (perspective has no shared scale)
 
    Each view writes <view>.png (lit by a fixed top-left key light, for looking
    at) and <view>.flat.png (unlit base colours, for colour checks), both on a
@@ -30,6 +32,7 @@ export const VIEWS = {
   front: { dir: [0, 0, 1], up: [0, 1, 0] },
   back: { dir: [0, 0, -1], up: [0, 1, 0] },
   top: { dir: [0, 1, 0], up: [-1, 0, 0] },
+  hero: { dir: [1, 0.6, 1.1], up: [0, 1, 0], perspective: true },
 };
 
 const PAGE = `<!doctype html>
@@ -56,12 +59,16 @@ window.renderViews = async (size, views) => {
   renderer.setClearColor(0x000000, 0);
   const scene = new THREE.Scene();
   scene.add(root, new THREE.HemisphereLight(0xffffff, 0x9aa3b5, 1.4));
-  const camera = new THREE.OrthographicCamera(-half, half, half, -half, 0.01, longest * 10);
-  const key = new THREE.DirectionalLight(0xffffff, 2.0);
-  key.position.set(-1, 1.2, 1);
-  camera.add(key, key.target);
-  key.target.position.set(0, 0, -1);
-  scene.add(camera);
+  const ortho = new THREE.OrthographicCamera(-half, half, half, -half, 0.01, longest * 10);
+  const FOV = 30;
+  const perspective = new THREE.PerspectiveCamera(FOV, 1, 0.01, longest * 20);
+  for (const camera of [ortho, perspective]) {
+    const key = new THREE.DirectionalLight(0xffffff, 2.0);
+    key.position.set(-1, 1.2, 1);
+    camera.add(key, key.target);
+    key.target.position.set(0, 0, -1);
+    scene.add(camera);
+  }
 
   const meshes = [];
   root.traverse((o) => o.isMesh && meshes.push(o));
@@ -72,7 +79,10 @@ window.renderViews = async (size, views) => {
 
   const images = {};
   for (const [name, v] of Object.entries(views)) {
-    camera.position.copy(centre).addScaledVector(new THREE.Vector3(...v.dir), longest * 3);
+    const camera = v.perspective ? perspective : ortho;
+    // Far enough that the longest side fills about FILL of the frame either way.
+    const distance = v.perspective ? longest / FILL / (2 * Math.tan(THREE.MathUtils.degToRad(FOV / 2))) : longest * 3;
+    camera.position.copy(centre).addScaledVector(new THREE.Vector3(...v.dir).normalize(), distance);
     camera.up.set(...v.up);
     camera.lookAt(centre);
     renderer.render(scene, camera);
@@ -131,7 +141,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const flag = (name, fallback) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : fallback);
   const [model, out] = args.filter((a, i) => !a.startsWith('--') && !args[i - 1]?.startsWith('--'));
   if (!model || !out) {
-    console.error('usage: node views.mjs <model.glb> <out-dir> [--size 1024] [--views side,front,back,top]');
+    console.error('usage: node views.mjs <model.glb> <out-dir> [--size 1024] [--views side,front,back,top,hero]');
     process.exit(2);
   }
   const meta = await renderViews(model, out, { size: Number(flag('size', 1024)), views: flag('views', Object.keys(VIEWS).join(',')).split(',') });

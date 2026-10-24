@@ -95,12 +95,21 @@ r = compare.compare(os.path.join(T, "concept.json"), os.path.join(T, "tall"), os
 assert 0.05 < r["views"]["side"]["h_err"] < 0.10, r["views"]["side"]
 assert r["views"]["side"]["iou"] < 0.95, r["views"]["side"]
 
-# the CLI exits 1 when a view falls under --min-iou, 0 when all pass
+# the CLI's default gates (IoU 0.94, size 3%, outline p95 3%) pass a faithful model and fail a tall one
 cli = [sys.executable, "-I", os.path.join(HERE, "compare.py"), os.path.join(T, "concept.json")]
-assert subprocess.run(cli + [os.path.join(T, "tall"), os.path.join(T, "o1"), "--min-iou", "0.95", "--outline", "3"],
-                      capture_output=True).returncode == 1
-assert subprocess.run(cli + [os.path.join(T, "good"), os.path.join(T, "o2"), "--min-iou", "0.95", "--outline", "3"],
-                      capture_output=True).returncode == 0
+run = lambda renders, out, *extra: subprocess.run(cli + [os.path.join(T, renders), os.path.join(T, out), "--outline", "3", *extra],
+                                                  capture_output=True, text=True)
+assert run("good", "o2").returncode == 0
+assert run("tall", "o1").returncode == 1
+assert run("tall", "o1", "--min-iou", "0.5", "--max-size", "0.2", "--max-p95", "0.2").returncode == 0
+
+# a 4% height error fails the size gate even while IoU stays high, and --gate leaves that view out
+renders(os.path.join(T, "tall4"), side_kw={"tall": 1.06})
+r = compare.compare(os.path.join(T, "concept.json"), os.path.join(T, "tall4"), os.path.join(T, "o3"), outline=3)
+assert r["views"]["side"]["iou"] > 0.94 and r["views"]["side"]["h_err"] > 0.03, r["views"]["side"]
+failed = run("tall4", "o3")
+assert failed.returncode == 1 and "FAIL" in failed.stdout, failed.stdout
+assert run("tall4", "o3", "--gate", "front").returncode == 0
 
 # components finds both drawings and the label, largest first
 boxes = compare.components(os.path.join(T, "sheet.png"))
@@ -113,5 +122,9 @@ cfg = sheet(os.path.join(T, "sheet2.png"), front_tall=1.1)
 json.dump(cfg, open(os.path.join(T, "concept2.json"), "w"))
 r = compare.compare(os.path.join(T, "concept2.json"), os.path.join(T, "good"), os.path.join(T, "out-c"), outline=3)
 assert 0.05 < r["consistency"]["H"] < 0.10, r["consistency"]
+
+# check reads the same consistency from the sheet alone, before any model exists
+c = compare.check(os.path.join(T, "concept2.json"), outline=3)
+assert abs(c["H"] - r["consistency"]["H"]) < 1e-3, (c, r["consistency"])
 
 print("ok")

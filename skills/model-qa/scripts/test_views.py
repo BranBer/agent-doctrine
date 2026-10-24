@@ -42,6 +42,11 @@ for view in ("side", "top"):
     x, centre = pink_x(view)
     assert x < centre, (view, x, centre)
 
+# a perspective three-quarter hero view comes with every run, for people to look at
+hero = cv2.imread(os.path.join(out, "hero.png"), cv2.IMREAD_UNCHANGED)
+assert hero is not None and (hero[..., 3] > 127).mean() > 0.05, "hero view missing or empty"
+assert "hero" not in [v for v in meta["views"] if not meta["views"][v].get("perspective")]
+
 # the unlit pass keeps the material's own colour (#3D63DD)
 flat = cv2.imread(os.path.join(out, "front.flat.png"), cv2.IMREAD_UNCHANGED)
 b, g, r, _ = flat[flat.shape[0] // 2 + int(0.6 * ppu), flat.shape[1] // 2]

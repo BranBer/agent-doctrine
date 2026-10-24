@@ -1,7 +1,9 @@
 """Compare a model's orthographic renders with the matching views of a concept sheet.
 
   python -I compare.py components <sheet.png> [--tol 10]
-  python -I compare.py <concept.json> <renders-dir> <out-dir> [--ref side:w] [--outline 0] [--min-iou 0.9]
+  python -I compare.py check <concept.json> [--outline 0]
+  python -I compare.py <concept.json> <renders-dir> <out-dir> [--ref side:w] [--outline 0]
+                       [--min-iou 0.94] [--max-size 0.03] [--max-p95 0.03] [--gate side,front,top]
 
 `components` lists the separate drawings on a sheet, largest first, and writes <sheet>-components.png
 with each one boxed and numbered, so the views can be named in concept.json:
@@ -19,8 +21,11 @@ It is taken off the concept's bounding box before scaling and added back around 
 Each view is aligned on its bounding box, bottom-centre (centre for top), and tried mirrored too.
 
 Writes <out-dir>/sheet.png (per view: concept, model, and an overlay where red is concept-only and
-blue is model-only) and <out-dir>/report.json, and prints a table. Exits 1 if any view's IoU is under
---min-iou.
+blue is model-only) and <out-dir>/report.json, and prints a table. A view passes when its IoU is at
+least --min-iou, its width and height errors are within --max-size, and its edge_p95 is within
+--max-p95. The defaults come from breaking a good model in known ways (roof 15% low, wheels 15% small,
+wheelbase 10% long, 10% narrower, a part removed): each fault failed at least one view and the good
+model passed every one. Exits 1 if any view named in --gate (default: all) fails.
 
 Per view:
   iou        shared silhouette area over combined silhouette area
@@ -126,26 +131,35 @@ def place(canvas_shape, img, bottom):
     return out
 
 
-def load_views(cfg, renders):
+def concept_views(cfg):
     sheet = cv2.imread(cfg["sheet"])
     if sheet is None:
         raise SystemExit("can't read sheet %s" % cfg["sheet"])
     views = {}
     for name, (x, y, w, h) in cfg["views"].items():
+        crop = sheet[y:y + h, x:x + w]
+        cmask, bg = concept_mask(crop)
+        cx, cy, cw, ch = bbox(cmask)
+        views[name] = {"concept": crop[cy:cy + ch, cx:cx + cw], "cmask": cmask[cy:cy + ch, cx:cx + cw], "bg": bg}
+    return views
+
+
+def load_views(cfg, renders):
+    views = concept_views(cfg)
+    for name, v in views.items():
         lit = cv2.imread(os.path.join(renders, name + ".png"), cv2.IMREAD_UNCHANGED)
         flat = cv2.imread(os.path.join(renders, name + ".flat.png"), cv2.IMREAD_UNCHANGED)
         if lit is None or lit.shape[2] != 4:
             raise SystemExit("no RGBA render %s.png in %s; run views.mjs first" % (name, renders))
-        crop = sheet[y:y + h, x:x + w]
-        cmask, bg = concept_mask(crop)
-        cx, cy, cw, ch = bbox(cmask)
         mmask = render_mask(lit)
         mx, my, mw, mh = bbox(mmask)
-        views[name] = {
-            "concept": crop[cy:cy + ch, cx:cx + cw], "cmask": cmask[cy:cy + ch, cx:cx + cw], "bg": bg,
-            "lit": lit[my:my + mh, mx:mx + mw], "flat": flat[my:my + mh, mx:mx + mw], "mmask": mmask[my:my + mh, mx:mx + mw],
-        }
+        v.update(lit=lit[my:my + mh, mx:mx + mw], flat=flat[my:my + mh, mx:mx + mw], mmask=mmask[my:my + mh, mx:mx + mw])
     return views
+
+
+def check(concept_json, outline=0):
+    """The concept sheet against itself: the spread of each dimension across the views showing it."""
+    return consistency(concept_views(json.load(open(concept_json, encoding="utf8"))), outline)
 
 
 def consistency(views, outline):
@@ -252,18 +266,36 @@ def main(a):
         for i, b in enumerate(components(pos[1], float(opt("--tol", 10)))):
             print(i, list(b))
         return 0
+    if pos[:1] == ["check"] and len(pos) == 2:
+        outline = int(opt("--outline", 0))
+        views = concept_views(json.load(open(pos[1], encoding="utf8")))
+        sizes = {n: dict(zip(AXES[n], (v["cmask"].shape[1] - 2 * outline, v["cmask"].shape[0] - 2 * outline))) for n, v in views.items()}
+        median = {a: float(np.median([s[a] for s in sizes.values() if a in s])) for a in "LWH"
+                  if any(a in s for s in sizes.values())}
+        for name, s in sizes.items():
+            print("%-6s " % name + ", ".join("%s %d px (%+.1f%% from median)" % (a, s[a], 100 * (s[a] / median[a] - 1)) for a in s))
+        spreads = check(pos[1], outline)
+        for axis, spread in spreads.items():
+            print("%s spread across views: %.1f%%%s" % (axis, 100 * spread, "  <- the sheet disagrees with itself" if spread > 0.03 else ""))
+        return 1 if any(s > 0.03 for s in spreads.values()) else 0
     if len(pos) != 3:
         raise SystemExit(__doc__)
     r = compare(*pos, ref=opt("--ref", "side:w"), outline=int(opt("--outline", 0)))
-    min_iou = float(opt("--min-iou", 0.9))
-    print("%-6s %6s %7s %7s %6s %6s %5s %s" % ("view", "IoU", "w", "h", "edge", "p95", "dE", "flip"))
+    min_iou, max_size, max_p95 = float(opt("--min-iou", 0.94)), float(opt("--max-size", 0.03)), float(opt("--max-p95", 0.03))
+    gated = opt("--gate", ",".join(r["views"])).split(",")
+    failed = []
+    print("%-6s %6s %7s %7s %6s %6s %5s %-5s %s" % ("view", "IoU", "w", "h", "edge", "p95", "dE", "flip", "gate"))
     for name, m in r["views"].items():
-        print("%-6s %6.3f %+6.1f%% %+6.1f%% %5.1f%% %5.1f%% %5.1f %s" % (
-            name, m["iou"], 100 * m["w_err"], 100 * m["h_err"], 100 * m["edge_mean"], 100 * m["edge_p95"], m["dE"], m["flip"]))
+        ok = m["iou"] >= min_iou and max(abs(m["w_err"]), abs(m["h_err"])) <= max_size and m["edge_p95"] <= max_p95
+        if name in gated and not ok:
+            failed.append(name)
+        print("%-6s %6.3f %+6.1f%% %+6.1f%% %5.1f%% %5.1f%% %5.1f %-5s %s" % (
+            name, m["iou"], 100 * m["w_err"], 100 * m["h_err"], 100 * m["edge_mean"], 100 * m["edge_p95"], m["dE"], m["flip"],
+            ("PASS" if ok else "FAIL") if name in gated else "(not gated)"))
     for axis, spread in r["consistency"].items():
         print("concept %s spread across views: %.1f%%%s" % (axis, 100 * spread, "  <- the sheet disagrees with itself" if spread > 0.03 else ""))
     print("wrote %s" % os.path.join(pos[2], "sheet.png"))
-    return 1 if any(m["iou"] < min_iou for m in r["views"].values()) else 0
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
