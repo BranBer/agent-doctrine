@@ -1,0 +1,140 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { chromium } from 'playwright';
+
+/* Orthographic renders of a GLB from the views a concept sheet shows.
+
+     node views.mjs <model.glb> <out-dir> [--size 1024] [--views side,front,back,top]
+
+   The model is read in the glTF frame: +Y up, nose toward +Z. Every view uses
+   one shared scale (pxPerUnit in views.json), so proportions between views are
+   real, the way a blueprint's are:
+
+     side   from the model's left (+X): nose points left, length across, height up
+     front  from +Z: width across, height up
+     back   from -Z: width across, height up
+     top    from +Y: nose points left, length across, width up
+
+   Each view writes <view>.png (lit by a fixed top-left key light, for looking
+   at) and <view>.flat.png (unlit base colours, for colour checks), both on a
+   transparent background, plus views.json. It runs in Playwright's own
+   headless Chromium, never the user's browser.                              */
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const THREE_DIR = join(HERE, 'node_modules', 'three');
+const ORIGIN = 'http://model-qa.local';
+
+export const VIEWS = {
+  side: { dir: [1, 0, 0], up: [0, 1, 0] },
+  front: { dir: [0, 0, 1], up: [0, 1, 0] },
+  back: { dir: [0, 0, -1], up: [0, 1, 0] },
+  top: { dir: [0, 1, 0], up: [-1, 0, 0] },
+};
+
+const PAGE = `<!doctype html>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// The share of the frame the model's longest side fills.
+const FILL = 0.8;
+
+window.renderViews = async (size, views) => {
+  const root = (await new GLTFLoader().loadAsync('/model.glb')).scene;
+  const box = new THREE.Box3().setFromObject(root);
+  const centre = box.getCenter(new THREE.Vector3());
+  const dims = box.getSize(new THREE.Vector3());
+  const longest = Math.max(dims.x, dims.y, dims.z);
+  const pxPerUnit = (size * FILL) / longest;
+  const half = size / 2 / pxPerUnit;
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(size, size);
+  renderer.setClearColor(0x000000, 0);
+  const scene = new THREE.Scene();
+  scene.add(root, new THREE.HemisphereLight(0xffffff, 0x9aa3b5, 1.4));
+  const camera = new THREE.OrthographicCamera(-half, half, half, -half, 0.01, longest * 10);
+  const key = new THREE.DirectionalLight(0xffffff, 2.0);
+  key.position.set(-1, 1.2, 1);
+  camera.add(key, key.target);
+  key.target.position.set(0, 0, -1);
+  scene.add(camera);
+
+  const meshes = [];
+  root.traverse((o) => o.isMesh && meshes.push(o));
+  const flat = new Map(meshes.map((m) => [m, [m.material].flat().map((mat) => new THREE.MeshBasicMaterial({
+    color: mat.color, vertexColors: mat.vertexColors, map: mat.map ?? null, side: mat.side,
+    transparent: mat.transparent, opacity: mat.opacity,
+  }))]));
+
+  const images = {};
+  for (const [name, v] of Object.entries(views)) {
+    camera.position.copy(centre).addScaledVector(new THREE.Vector3(...v.dir), longest * 3);
+    camera.up.set(...v.up);
+    camera.lookAt(centre);
+    renderer.render(scene, camera);
+    const lit = renderer.domElement.toDataURL('image/png');
+    const own = meshes.map((m) => m.material);
+    meshes.forEach((m) => { const f = flat.get(m); m.material = Array.isArray(m.material) ? f : f[0]; });
+    renderer.render(scene, camera);
+    const unlit = renderer.domElement.toDataURL('image/png');
+    meshes.forEach((m, i) => { m.material = own[i]; });
+    images[name] = { lit, unlit };
+  }
+  return { pxPerUnit, dims: { x: dims.x, y: dims.y, z: dims.z }, images };
+};
+window.ready = true;
+</script>`;
+
+export async function renderViews(modelPath, outDir, { size = 1024, views = Object.keys(VIEWS) } = {}) {
+  const unknown = views.filter((v) => !VIEWS[v]);
+  if (unknown.length) throw new Error(`unknown view ${unknown.join(', ')}; known: ${Object.keys(VIEWS).join(', ')}`);
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.route(`${ORIGIN}/**`, (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === '/') return route.fulfill({ contentType: 'text/html', body: PAGE });
+      if (path === '/model.glb') return route.fulfill({ path: resolve(modelPath), contentType: 'model/gltf-binary' });
+      if (path.startsWith('/three/')) {
+        return route.fulfill({ path: join(THREE_DIR, path.slice('/three/'.length)), contentType: 'text/javascript' });
+      }
+      return route.fulfill({ status: 404, body: 'not found' });
+    });
+    await page.goto(`${ORIGIN}/`);
+    await page.waitForFunction(() => window.ready || false, null, { timeout: 30_000 }).catch(() => {
+      throw new Error(`render page did not start: ${errors.join('; ') || 'no error reported'}`);
+    });
+    const picked = Object.fromEntries(views.map((v) => [v, VIEWS[v]]));
+    const result = await page.evaluate(([s, v]) => window.renderViews(s, v), [size, picked]);
+    mkdirSync(outDir, { recursive: true });
+    const png = (dataUrl) => Buffer.from(dataUrl.split(',', 2)[1], 'base64');
+    for (const [name, { lit, unlit }] of Object.entries(result.images)) {
+      writeFileSync(join(outDir, `${name}.png`), png(lit));
+      writeFileSync(join(outDir, `${name}.flat.png`), png(unlit));
+    }
+    const meta = { model: modelPath, size, pxPerUnit: result.pxPerUnit, dims: result.dims, views: picked };
+    writeFileSync(join(outDir, 'views.json'), JSON.stringify(meta, null, 2) + '\n');
+    return meta;
+  } finally {
+    await browser.close();
+  }
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const args = process.argv.slice(2);
+  const flag = (name, fallback) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : fallback);
+  const [model, out] = args.filter((a, i) => !a.startsWith('--') && !args[i - 1]?.startsWith('--'));
+  if (!model || !out) {
+    console.error('usage: node views.mjs <model.glb> <out-dir> [--size 1024] [--views side,front,back,top]');
+    process.exit(2);
+  }
+  const meta = await renderViews(model, out, { size: Number(flag('size', 1024)), views: flag('views', Object.keys(VIEWS).join(',')).split(',') });
+  const { x, y, z } = meta.dims;
+  console.log(`wrote ${Object.keys(meta.views).join(', ')} to ${out} (model ${x.toFixed(3)} wide x ${y.toFixed(3)} tall x ${z.toFixed(3)} long, ${meta.pxPerUnit.toFixed(2)} px/unit)`);
+}

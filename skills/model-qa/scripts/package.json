@@ -1,0 +1,10 @@
+{
+  "name": "model-qa",
+  "private": true,
+  "type": "module",
+  "description": "Orthographic renders of a 3D model for comparison with concept art. Kept outside every project so no project ships these dependencies.",
+  "dependencies": {
+    "playwright": "1.63.0",
+    "three": "0.186.1"
+  }
+}
