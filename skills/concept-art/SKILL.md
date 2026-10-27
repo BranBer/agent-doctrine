@@ -5,10 +5,15 @@ description: Use when making AI concept art for a game or app asset - mood image
 
 # Concept art
 
-AI images are reference only. They settle a look, and then a person or code builds the asset
-that ships. This skill makes concepts that share one look, records every image and every
-choice, and produces orthographic sheets clean enough to model from. `model-qa` then checks
-the model against them.
+Concepts settle a look. The asset that ships is usually built by a person or in code from them,
+which keeps it consistent and keeps it the developer's own work: in the US, purely AI-generated
+output can't be copyrighted. This skill makes concepts that share one look, records every image
+and every choice, and produces orthographic sheets clean enough to model from. `model-qa` then
+checks the model against them.
+
+Whether any AI output may ship as is (music, textures, icons) is the project's call. The common
+bar is that nothing reading as AI slop ships, and anything AI-made that does ship passes the same
+review as hand-made work and is logged.
 
 ## Set up once per project
 
@@ -79,8 +84,9 @@ as a reference.
 
 ## Never
 
-- Ship a concept, a crop of one, or a trace of its pixels. Store art such as covers and videos is
-  rendered in the engine.
+- Let an exploration concept ship by accident. Add a build check that fails when a file in the
+  build matches one in `art/concept/` by hash. Crimson Desert's 2026 apology began with AI
+  exploration art that slipped into the release.
 - Put brand, product or game names in prompts.
 - Turn on OpenRouter prompt logging. Opting in grants OpenRouter a perpetual licence to the
   prompts and outputs.
