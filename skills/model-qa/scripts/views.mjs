@@ -21,8 +21,11 @@ import { chromium } from 'playwright';
 
    Each view writes <view>.png (lit by a fixed top-left key light, for looking
    at) and <view>.flat.png (unlit base colours, for colour checks), both on a
-   transparent background, plus views.json. It runs in Playwright's own
-   headless Chromium, never the user's browser.                              */
+   transparent background, plus views.json. views.json also holds the model's
+   box and every named part's box (the named children of the model's root),
+   with the parts the model declares one-sided (userData.oneSided, carried in
+   glTF as a node's extras). It runs in Playwright's own headless Chromium,
+   never the user's browser.                                                 */
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const THREE_DIR = join(HERE, 'node_modules', 'three');
@@ -45,8 +48,20 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // The share of the frame the model's longest side fills.
 const FILL = 0.8;
 
-window.renderViews = async (size, views) => {
+const boxOf = (object) => {
+  const b = new THREE.Box3().setFromObject(object);
+  return { min: b.min.toArray(), max: b.max.toArray(), centre: b.getCenter(new THREE.Vector3()).toArray() };
+};
+
+window.renderViews = async (size, views, { dropOneSided = false, antialias = true } = {}) => {
   const root = (await new GLTFLoader().loadAsync('/model.glb')).scene;
+  // The model's own root: the scene wraps it, and an exported group wraps its parts.
+  let top = root;
+  while (top.children.length === 1 && !top.children[0].isMesh) top = top.children[0];
+  // A part is a child named in the file: the loader keeps that name in userData.name, and names the rest itself (mesh_0).
+  const named = top.children.filter((c) => c.userData.name !== undefined);
+  const parts = Object.fromEntries(named.map((c) => [c.name, { ...boxOf(c), oneSided: !!c.userData.oneSided }]));
+  if (dropOneSided) top.children.filter((c) => c.userData.oneSided).forEach((c) => c.removeFromParent());
   const box = new THREE.Box3().setFromObject(root);
   const centre = box.getCenter(new THREE.Vector3());
   const dims = box.getSize(new THREE.Vector3());
@@ -54,7 +69,7 @@ window.renderViews = async (size, views) => {
   const pxPerUnit = (size * FILL) / longest;
   const half = size / 2 / pxPerUnit;
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  const renderer = new THREE.WebGLRenderer({ antialias, alpha: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1);
   renderer.setSize(size, size);
   renderer.setClearColor(0x000000, 0);
@@ -98,12 +113,21 @@ window.renderViews = async (size, views) => {
     meshes.forEach((m, i) => { m.material = own[i]; });
     images[name] = { lit, unlit };
   }
-  return { pxPerUnit, dims: { x: dims.x, y: dims.y, z: dims.z }, triangles, meshes: meshes.length, images };
+  return {
+    pxPerUnit, dims: { x: dims.x, y: dims.y, z: dims.z }, box: { min: box.min.toArray(), max: box.max.toArray() },
+    parts, dropped: dropOneSided ? Object.keys(parts).filter((n) => parts[n].oneSided) : [],
+    triangles, meshes: meshes.length, images,
+  };
 };
 window.ready = true;
 </script>`;
 
-export async function renderViews(modelPath, outDir, { size = 1024, views = Object.keys(VIEWS), hero } = {}) {
+/**
+ * dropOneSided renders the model without the parts it declares one-sided, and antialias false renders hard edges, for
+ * the symmetry check: multisampling's sample pattern is not mirror-symmetric, so it puts a symmetric model's two edges
+ * a pixel apart, where without it a pixel is in exactly when its centre is.
+ */
+export async function renderViews(modelPath, outDir, { size = 1024, views = Object.keys(VIEWS), hero, dropOneSided = false, antialias = true } = {}) {
   const unknown = views.filter((v) => !VIEWS[v]);
   if (unknown.length) throw new Error(`unknown view ${unknown.join(', ')}; known: ${Object.keys(VIEWS).join(', ')}`);
   const browser = await chromium.launch();
@@ -125,7 +149,7 @@ export async function renderViews(modelPath, outDir, { size = 1024, views = Obje
       throw new Error(`render page did not start: ${errors.join('; ') || 'no error reported'}`);
     });
     const picked = Object.fromEntries(views.map((v) => [v, v === 'hero' && hero ? { ...VIEWS.hero, dir: hero } : VIEWS[v]]));
-    const result = await page.evaluate(([s, v]) => window.renderViews(s, v), [size, picked]);
+    const result = await page.evaluate(([s, v, o]) => window.renderViews(s, v, o), [size, picked, { dropOneSided, antialias }]);
     mkdirSync(outDir, { recursive: true });
     const png = (dataUrl) => Buffer.from(dataUrl.split(',', 2)[1], 'base64');
     for (const [name, { lit, unlit }] of Object.entries(result.images)) {
@@ -133,8 +157,8 @@ export async function renderViews(modelPath, outDir, { size = 1024, views = Obje
       writeFileSync(join(outDir, `${name}.flat.png`), png(unlit));
     }
     const meta = {
-      model: modelPath, size, pxPerUnit: result.pxPerUnit, dims: result.dims,
-      triangles: result.triangles, meshes: result.meshes, views: picked,
+      model: modelPath, size, pxPerUnit: result.pxPerUnit, dims: result.dims, box: result.box,
+      triangles: result.triangles, meshes: result.meshes, views: picked, parts: result.parts, dropped: result.dropped,
     };
     writeFileSync(join(outDir, 'views.json'), JSON.stringify(meta, null, 2) + '\n');
     return meta;

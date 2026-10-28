@@ -2,6 +2,7 @@
 
   python -I compare.py components <sheet.png> [--tol 10]
   python -I compare.py check <concept.json> [--outline 0]
+  python -I compare.py symmetry <renders-dir> [--min-iou 0.995] [--tol 0.005]
   python -I compare.py <concept.json> <renders-dir> <out-dir> [--ref side:w] [--outline 0]
                        [--min-iou 0.94] [--max-size 0.03] [--max-p95 0.03] [--max-colour 1] [--gate side,front,top]
                        [--bar bar.json]
@@ -45,6 +46,15 @@ consistency checks the concept against itself: the spread of length (L), width (
 across the views that show each one. `check` names any view more than 3% from the median (leave it
 out of --gate) and exits 1 only when side and front, the master views, disagree on height by more
 than 5%, which needs a new sheet.
+
+symmetry checks a bilaterally symmetric model against its own mirror image, from the front and top
+renders and views.json that views.mjs wrote (symmetry.mjs makes them without the parts the model
+declares one-sided). It mirrors each render about the model's centre line, X = 0, and scores the
+mirrored silhouette's IoU; and it reads every named part's box: a part named *-left / *-right or
+*_L / *_R is paired with its twin, and any other part must be centred on X = 0. It passes when both
+IoUs are at least --min-iou, every unpaired part's centre is within --tol (metres) of X = 0, and
+every pair mirrors within --tol on each face of its box. One-sided parts are listed and not judged.
+Writes <renders-dir>/symmetry.json and symmetry.png (red: the model only, blue: its mirror only).
 """
 import json, os, sys
 
@@ -277,6 +287,99 @@ def compare(concept_json, renders, out_dir, ref="side:w", outline=0):
     return report
 
 
+# Twins by name: the suffix of a left part and of its right twin.
+SIDES = (("-left", "-right"), ("_L", "_R"))
+
+
+def twin_of(name):
+    """The name of a part's twin and the part's side, or (None, None) for a part with no side."""
+    for left, right in SIDES:
+        if name.endswith(left):
+            return name[:-len(left)] + right, "left"
+        if name.endswith(right):
+            return name[:-len(right)] + left, "right"
+    return None, None
+
+
+def mirrored(mask, axis, along_rows):
+    """The mask reflected about a line `axis` pixels from its left edge (top edge with along_rows), in
+    pixel-edge coordinates, so a line between two pixels or through one both mirror exactly."""
+    m = mask.astype(np.float32)
+    if along_rows:
+        m = m.T
+    h, w = m.shape
+    # Pixel i's centre (i + 0.5) mirrors to 2 * axis - i - 0.5, which is pixel 2 * axis - 1 - i.
+    out = cv2.warpAffine(m, np.float32([[-1, 0, 2 * axis - 1], [0, 1, 0]]), (w, h), flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP)
+    return (out.T if along_rows else out) >= 0.5
+
+
+def symmetry(renders, min_iou=0.995, tol=0.005):
+    meta = json.load(open(os.path.join(renders, "views.json"), encoding="utf8"))
+    ppu, size = meta["pxPerUnit"], meta["size"]
+    # views.mjs centres every view on the model's box, so X = 0 sits this far from the image's middle.
+    centre_x = (meta["box"]["min"][0] + meta["box"]["max"][0]) / 2
+    axis = size / 2 - centre_x * ppu
+    report, panes = {"min_iou": min_iou, "tol": tol, "dropped": meta.get("dropped", []), "views": {}, "parts": {}}, []
+    # The front view has +X to the right; the top view has +X downward.
+    for name, along_rows in (("front", False), ("top", True)):
+        rgba = cv2.imread(os.path.join(renders, name + ".png"), cv2.IMREAD_UNCHANGED)
+        if rgba is None or rgba.shape[2] != 4:
+            raise SystemExit("no RGBA render %s.png in %s; run symmetry.mjs or views.mjs first" % (name, renders))
+        m = render_mask(rgba)
+        f = mirrored(m, axis, along_rows)
+        iou = float((m & f).sum() / max(1, (m | f).sum()))
+        report["views"][name] = {"iou": round(iou, 4), "pass": iou >= min_iou}
+        over = np.full(m.shape + (3,), 255, np.uint8)
+        over[m & f], over[m & ~f], over[f & ~m] = GREY, RED, BLUE
+        # The centre line, unless the model lies so far to one side that it is off the image
+        line = int(round(axis))
+        if 0 <= line < over.shape[0 if along_rows else 1]:
+            if along_rows:
+                over[line, :] = (0, 0, 0)
+            else:
+                over[:, line] = (0, 0, 0)
+        panes.append(over)
+    parts = meta.get("parts", {})
+    for name, p in parts.items():
+        twin, side = twin_of(name)
+        if p.get("oneSided"):
+            report["parts"][name] = {"centre": p["centre"], "check": "one-sided"}
+            continue
+        if twin in parts and not parts[twin].get("oneSided"):
+            if side == "right":
+                continue
+            l, r = p, parts[twin]
+            # The left box against the right one mirrored through X = 0, face by face.
+            error = max(abs(l["min"][0] + r["max"][0]), abs(l["max"][0] + r["min"][0]),
+                        *(abs(l[k][i] - r[k][i]) for k in ("min", "max") for i in (1, 2)))
+            report["parts"][name] = {"centre": p["centre"], "twin": twin, "twin_centre": r["centre"], "check": "pair",
+                                     "error": round(error, 5), "pass": error <= tol}
+        else:
+            error = abs(p["centre"][0])
+            report["parts"][name] = {"centre": p["centre"], "check": "centred" if twin is None else "no twin",
+                                     "error": round(error, 5), "pass": error <= tol}
+    report["pass"] = all(v["pass"] for v in report["views"].values()) and all(p.get("pass", True) for p in report["parts"].values())
+    height = max(p.shape[0] for p in panes)
+    cv2.imwrite(os.path.join(renders, "symmetry.png"), np.hstack([cv2.copyMakeBorder(p, 0, height - p.shape[0], 0, 8, cv2.BORDER_CONSTANT, value=(255, 255, 255)) for p in panes]))
+    json.dump(report, open(os.path.join(renders, "symmetry.json"), "w", encoding="utf8"), indent=2)
+    return report
+
+
+def print_symmetry(r):
+    print("%-6s %10s %s" % ("view", "mirror IoU", "gate"))
+    for name, v in r["views"].items():
+        print("%-6s %10.4f %s" % (name, v["iou"], "PASS" if v["pass"] else "FAIL (needs %.3f)" % r["min_iou"]))
+    print("\n%-28s %-26s %-28s %9s %s" % ("part", "centre x, y, z (m)", "checked as", "off (mm)", "gate"))
+    for name, p in r["parts"].items():
+        c = "%+.4f %+.4f %+.4f" % tuple(p["centre"])
+        how = "pair with " + p["twin"] if p["check"] == "pair" else p["check"]
+        off = "%9.1f" % (1000 * p["error"]) if "error" in p else "%9s" % "-"
+        print("%-28s %-26s %-28s %s %s" % (name, c, how, off, "" if "pass" not in p else "PASS" if p["pass"] else "FAIL"))
+    if r["dropped"]:
+        print("\nrendered without the one-sided parts: %s" % ", ".join(r["dropped"]))
+    print("\nsymmetry %s (mirror IoU >= %.3f; centres and pairs within %.1f mm)" % ("PASSES" if r["pass"] else "FAILS", r["min_iou"], 1000 * r["tol"]))
+
+
 def main(a):
     opt = lambda name, default: a[a.index(name) + 1] if name in a else default
     pos = [x for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1].startswith("--"))]
@@ -284,6 +387,10 @@ def main(a):
         for i, b in enumerate(components(pos[1], float(opt("--tol", 10)))):
             print(i, list(b))
         return 0
+    if pos[:1] == ["symmetry"] and len(pos) == 2:
+        r = symmetry(pos[1], float(opt("--min-iou", 0.995)), float(opt("--tol", 0.005)))
+        print_symmetry(r)
+        return 0 if r["pass"] else 1
     if pos[:1] == ["check"] and len(pos) == 2:
         outline = int(opt("--outline", 0))
         views = concept_views(json.load(open(pos[1], encoding="utf8")))

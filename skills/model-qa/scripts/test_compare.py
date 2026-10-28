@@ -165,4 +165,48 @@ img[185:195, 100:180] = NAVY   # a whole word of label, its letters bridged into
 m, _ = compare.concept_mask(img)
 assert m[47, 101] and not m[175, 61] and not m[190, 140], (m[47, 101], m[175, 61], m[190, 140])
 
+
+def sym_renders(d, cols, box_x, parts):
+    """Front and top renders of 200 px at 50 px a metre, the model filling columns (rows in top) cols, as views.mjs
+    writes them for a model whose box spans box_x in X."""
+    os.makedirs(d, exist_ok=True)
+    for name in ("front", "top"):
+        rgba = np.zeros((200, 200, 4), np.uint8)
+        band = (slice(40, 160), slice(*cols)) if name == "front" else (slice(*cols), slice(40, 160))
+        rgba[band] = (90, 90, 90, 255)
+        cv2.imwrite(os.path.join(d, name + ".png"), rgba)
+    json.dump({"size": 200, "pxPerUnit": 50, "box": {"min": [box_x[0], 0, -1], "max": [box_x[1], 1, 1]}, "parts": parts,
+               "dropped": []}, open(os.path.join(d, "views.json"), "w"))
+
+
+def part(cx, w=0.2, y=0.5, z=0.0, **kw):
+    return {"min": [cx - w / 2, y - 0.1, z - 0.1], "max": [cx + w / 2, y + 0.1, z + 0.1], "centre": [cx, y, z], **kw}
+
+
+# symmetry mirrors about X = 0, which sits where the box centres the view: a framing 0.2 m off centre puts it at
+# column 90, and a silhouette symmetric about that column is symmetric; mirrored about the image's middle it is not
+sym = os.path.join(T, "sym")
+sym_renders(sym, (60, 120), (-0.6, 1.0), {})
+r = compare.symmetry(sym)
+assert r["views"]["front"]["iou"] == 1 and r["views"]["top"]["iou"] == 1 and r["pass"], r
+sym_renders(sym, (60, 120), (-0.6, 0.6), {})
+assert compare.symmetry(sym)["views"]["front"]["iou"] < 0.6
+
+# twins by -left/-right and _L/_R are mirrored face by face, other parts must be centred, a part whose twin is missing
+# is judged as centred, and a one-sided part is listed and not judged; 5 mm is the tolerance
+parts = {"body": part(0.004), "rack": part(-0.006), "door-left": part(0.9), "door-right": part(-0.9), "arm_L": part(0.5, z=0.2),
+         "arm_R": part(-0.5, z=0.207), "lamp-left": part(0.7), "exhaust": part(0.6, oneSided=True)}
+sym_renders(sym, (70, 130), (-0.6, 0.6), parts)
+r = compare.symmetry(sym)
+p = r["parts"]
+assert p["body"]["pass"] and p["body"]["check"] == "centred", p["body"]
+assert not p["rack"]["pass"] and abs(p["rack"]["error"] - 0.006) < 1e-9, p["rack"]
+assert p["door-left"]["check"] == "pair" and p["door-left"]["pass"] and "door-right" not in p, p
+assert p["arm_L"]["twin"] == "arm_R" and not p["arm_L"]["pass"] and abs(p["arm_L"]["error"] - 0.007) < 1e-9, p["arm_L"]
+assert p["lamp-left"]["check"] == "no twin" and not p["lamp-left"]["pass"], p["lamp-left"]
+assert p["exhaust"] == {"centre": [0.6, 0.5, 0.0], "check": "one-sided"}, p["exhaust"]
+assert not r["pass"] and r["views"]["front"]["pass"]
+sym_cli = subprocess.run([sys.executable, "-I", os.path.join(HERE, "compare.py"), "symmetry", sym], capture_output=True, text=True)
+assert sym_cli.returncode == 1 and "rack" in sym_cli.stdout and "FAILS" in sym_cli.stdout, sym_cli.stdout
+
 print("ok")

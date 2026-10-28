@@ -27,6 +27,7 @@ them into a project. Run them from the project root.
 | Check the sheet against itself | `python -I <scripts>/compare.py check <concept.json>` |
 | Score and gate | `python -I <scripts>/compare.py <concept.json> <renders> <out> [--outline N] [--gate side,front] [--bar bar.json]` |
 | Calibrate the bar for this asset | `node <scripts>/calibrate.mjs <module> <concept.json> <out> [--gate side,front,top]` |
+| Check symmetry about X = 0 | `node <scripts>/symmetry.mjs <model.glb> <dir>` |
 
 **The model's frame** is glTF's: +Y up, front toward +Z, units in metres.
 
@@ -62,12 +63,29 @@ them into a project. Run them from the project root.
    - Take colours from the palette tokens and stay within the triangle budget.
    - **Build mirrored parts from one function.** The sheet shows only the left side, so nothing can
      check the right side.
+   - **Centre the middle parts on X = 0 exactly.** Take a centred part's width as one half-width
+     from the master view's centre line, never as two edges read off a view that may be drawn
+     off-centre.
 5. **Score, read the sheet, fix.**
    - In the overlay, red is concept only and blue is model only. Fix the largest patch first.
    - One loop takes about 2 s.
-6. **Calibrate once the default bar passes.** Then gate every later round with `--bar` (see below).
-7. **It is done when** the calibrated bar passes and the hero review lists nothing you'd still
-   fix.
+6. **Check the symmetry** of a model that should be bilaterally symmetric.
+   - **Why it exists:** the scores compare whole silhouettes, so a small part off the centre line
+     passes them. The hatchback's roof rack sat 56 mm to one side, its rails measured off a top view
+     the sheet drew off-centre, and every score passed. The user saw it in the first play.
+   - `symmetry` mirrors the front and top renders about X = 0 and scores the mirrored silhouette's
+     IoU. It reads every named part's box: a `*-left` / `*-right` or `*_L` / `*_R` part is paired
+     with its twin, and every other part must be centred.
+   - **It passes** when both IoUs are at least 0.995, every unpaired part is centred within 5 mm of
+     X = 0, and every pair mirrors within 5 mm on each face of its box.
+   - **Declare a part that is one-sided by design** (an exhaust, an antenna) with
+     `userData.oneSided = true`, which glTF carries as the node's extras. The check renders without
+     it, lists it, and judges everything else.
+   - It renders without antialiasing: multisampling's sample pattern isn't mirror-symmetric, and it
+     puts a symmetric model's two edges a pixel apart.
+7. **Calibrate once the default bar passes.** Then gate every later round with `--bar` (see below).
+8. **It is done when** the calibrated bar passes, `symmetry` passes on a symmetric model, and the
+   hero review lists nothing you'd still fix.
 
 ## What the scores can and cannot see
 
@@ -96,7 +114,7 @@ writes `bar.json`, a per-view bar set just inside the good model's own numbers.
 - **Gate every later round with `--bar bar.json`.** Any regression of that size then fails.
 - **Read its "no view sees" list.** Those faults go to the hero review, or are prevented by
   construction. On the hatchback the list was:
-  - right-side parts;
+  - right-side parts, which `symmetry` now holds to their left twins;
   - the tailgate, visible only in the back view, which isn't gated;
   - dark flares over dark tyres;
   - 15% shrinks of small parts.
