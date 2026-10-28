@@ -14,8 +14,11 @@ import { renderViews } from './views.mjs';
    one-sided (userData.oneSided on the part, which glTF carries as the node's extras), then
    compare.py symmetry mirrors both renders, scores the mirrored silhouette's IoU and checks every
    named part's box: twins (*-left / *-right, *_L / *_R) must mirror each other, and every other
-   part must be centred on X = 0. Prints a table, writes symmetry.json and symmetry.png in out-dir,
-   and exits 1 when the model is not symmetric.                                                   */
+   part must be centred on X = 0. Prints a table and exits 1 when the model is not symmetric.
+
+   Its renders are made for this check alone (aliased, one-sided parts left out), so they and
+   symmetry.json and symmetry.png go in a symmetry/ folder of out-dir, never over the scoring
+   renders that may share it.                                                                     */
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -29,8 +32,9 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
     process.exit(2);
   }
   // Hard edges, so a symmetric model rasterises symmetrically (see renderViews)
-  await renderViews(model, out, { size: Number(flag('size') ?? 1024), views: ['front', 'top'], dropOneSided: true, antialias: false });
+  const dir = join(out, 'symmetry');
+  await renderViews(model, dir, { size: Number(flag('size') ?? 1024), views: ['front', 'top'], dropOneSided: true, antialias: false });
   const limits = ['min-iou', 'tol'].flatMap((name) => (flag(name) === undefined ? [] : [`--${name}`, flag(name)]));
-  const run = spawnSync('python', ['-I', join(HERE, 'compare.py'), 'symmetry', out, ...limits], { stdio: 'inherit' });
+  const run = spawnSync('python', ['-I', join(HERE, 'compare.py'), 'symmetry', dir, ...limits], { stdio: 'inherit' });
   process.exit(run.status ?? 1);
 }

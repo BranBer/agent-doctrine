@@ -209,4 +209,21 @@ assert not r["pass"] and r["views"]["front"]["pass"]
 sym_cli = subprocess.run([sys.executable, "-I", os.path.join(HERE, "compare.py"), "symmetry", sym], capture_output=True, text=True)
 assert sym_cli.returncode == 1 and "rack" in sym_cli.stdout and "FAILS" in sym_cli.stdout, sym_cli.stdout
 
+# a model with no named parts is checked on its silhouettes alone, and says so
+sym_renders(sym, (70, 130), (-0.6, 0.6), {})
+r = compare.symmetry(sym)
+assert r["pass"] and any("no named parts" in w for w in r["warnings"]), r
+sym_cli = subprocess.run([sys.executable, "-I", os.path.join(HERE, "compare.py"), "symmetry", sym], capture_output=True, text=True)
+assert sym_cli.returncode == 0 and "no named parts" in sym_cli.stdout, sym_cli.stdout
+
+# a views.json written before views.mjs recorded the model's box is a clear error, not a KeyError
+meta = json.load(open(os.path.join(sym, "views.json")))
+del meta["box"], meta["parts"]
+json.dump(meta, open(os.path.join(sym, "views.json"), "w"))
+try:
+    compare.symmetry(sym)
+    raise AssertionError("an old views.json was read as if it had a box")
+except SystemExit as e:
+    assert "older views.mjs" in str(e) and "symmetry.mjs" in str(e), e
+
 print("ok")

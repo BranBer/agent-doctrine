@@ -27,7 +27,7 @@ them into a project. Run them from the project root.
 | Check the sheet against itself | `python -I <scripts>/compare.py check <concept.json>` |
 | Score and gate | `python -I <scripts>/compare.py <concept.json> <renders> <out> [--outline N] [--gate side,front] [--bar bar.json]` |
 | Calibrate the bar for this asset | `node <scripts>/calibrate.mjs <module> <concept.json> <out> [--gate side,front,top]` |
-| Check symmetry about X = 0 | `node <scripts>/symmetry.mjs <model.glb> <dir>` |
+| Check symmetry about X = 0 | `node <scripts>/symmetry.mjs <model.glb> <dir>`, writing into `<dir>/symmetry/` |
 
 **The model's frame** is glTF's: +Y up, front toward +Z, units in metres.
 
@@ -82,7 +82,11 @@ them into a project. Run them from the project root.
      `userData.oneSided = true`, which glTF carries as the node's extras. The check renders without
      it, lists it, and judges everything else.
    - It renders without antialiasing: multisampling's sample pattern isn't mirror-symmetric, and it
-     puts a symmetric model's two edges a pixel apart.
+     puts a symmetric model's two edges a pixel apart. Those renders, `symmetry.json` and the overlay
+     go in a `symmetry/` folder of the output directory, so they never overwrite the scoring renders.
+   - **Hidden meshes aren't judged.** The GLB export leaves out what is hidden, such as a car's broken
+     panes waiting to be shown, so hold those to their twins in the project's own tests.
+   - A model with no named parts gets a warning: only its silhouettes were checked.
 7. **Calibrate once the default bar passes.** Then gate every later round with `--bar` (see below).
 8. **It is done when** the calibrated bar passes, `symmetry` passes on a symmetric model, and the
    hero review lists nothing you'd still fix.

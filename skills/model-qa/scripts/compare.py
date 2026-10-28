@@ -315,11 +315,15 @@ def mirrored(mask, axis, along_rows):
 
 def symmetry(renders, min_iou=0.995, tol=0.005):
     meta = json.load(open(os.path.join(renders, "views.json"), encoding="utf8"))
+    if "box" not in meta:
+        raise SystemExit("%s was written by an older views.mjs, which records no model box: run symmetry.mjs on the model "
+                         "again" % os.path.join(renders, "views.json"))
     ppu, size = meta["pxPerUnit"], meta["size"]
     # views.mjs centres every view on the model's box, so X = 0 sits this far from the image's middle.
     centre_x = (meta["box"]["min"][0] + meta["box"]["max"][0]) / 2
     axis = size / 2 - centre_x * ppu
-    report, panes = {"min_iou": min_iou, "tol": tol, "dropped": meta.get("dropped", []), "views": {}, "parts": {}}, []
+    report, panes = {"min_iou": min_iou, "tol": tol, "dropped": meta.get("dropped", []), "views": {}, "parts": {},
+                     "warnings": []}, []
     # The front view has +X to the right; the top view has +X downward.
     for name, along_rows in (("front", False), ("top", True)):
         rgba = cv2.imread(os.path.join(renders, name + ".png"), cv2.IMREAD_UNCHANGED)
@@ -340,6 +344,9 @@ def symmetry(renders, min_iou=0.995, tol=0.005):
                 over[:, line] = (0, 0, 0)
         panes.append(over)
     parts = meta.get("parts", {})
+    if not parts:
+        report["warnings"].append("no named parts: only the silhouettes were checked, so a part off the centre line "
+                                  "that keeps the silhouette symmetric would pass")
     for name, p in parts.items():
         twin, side = twin_of(name)
         if p.get("oneSided"):
@@ -377,6 +384,8 @@ def print_symmetry(r):
         print("%-28s %-26s %-28s %s %s" % (name, c, how, off, "" if "pass" not in p else "PASS" if p["pass"] else "FAIL"))
     if r["dropped"]:
         print("\nrendered without the one-sided parts: %s" % ", ".join(r["dropped"]))
+    for warning in r["warnings"]:
+        print("\nwarning: " + warning)
     print("\nsymmetry %s (mirror IoU >= %.3f; centres and pairs within %.1f mm)" % ("PASSES" if r["pass"] else "FAILS", r["min_iou"], 1000 * r["tol"]))
 
 
