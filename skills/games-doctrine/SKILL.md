@@ -91,6 +91,61 @@ debris - comes from a pool that resets objects instead of allocating new ones.
 The pool lives with what it pools (`render/particles/pool.ts`), not in a
 general `pools/` drawer.
 
+A pool that recycles its oldest piece should shrink that piece out over a
+fraction of a second. One that vanishes in a frame reads as a bug.
+
+## A feel slice must read in the game
+
+A grey-box slice can't be judged on feel unless the player can read what it is.
+One failed a feel gate as "low quality" with its physics fine, because nothing
+on screen said what to do. Before asking anyone to judge feel:
+
+- **Goal, threat and controls show in the game,** without a page to read.
+- **The first frame shows the place.** A chase camera that looks at the car at
+  rest points at the floor; a look-ahead floor brings the world into frame.
+- **Breakage shows.** What the sim says happened (a part off, a robot wrecked)
+  appears on screen and is heard.
+- **The controller looks at every picture as a player would,** beside the
+  concept. Builds that pass every test have still looked wrong.
+
+## What keeps a 3D scene believable
+
+- **The key light is never behind the chase camera.** Lit from behind the camera,
+  every face the player sees takes the same light and the forms go flat.
+- **A collider encloses whatever can touch it.** A wheel, roof or corner that can
+  meet the ground needs collider there, or it clips through on a wreck. The other
+  way round, anything drawn outside a collider must be out of reach: inside the
+  box, or high enough that a car passes under it. Test it against the car's own
+  geometry.
+- **A chase camera stays inside the walls, and keeps its pitch.** Clamp its spot
+  into the bounds on each axis, then lower it in proportion to the boom left on
+  the ground, with a floor over the roof. Sliding along the boom is the usual
+  answer, but it collapses in one step for a car scraping a wall.
+- **Decoration stays out of the play space,** or a car drives through it. Things in
+  the play space can be hit.
+- **Spawned effects bought with draw calls run out.** Draw burst pieces as extra
+  instances of the instanced meshes already on screen, and merge static scenery
+  into one vertex-coloured mesh. One project went from 26 scenery calls to 3.
+- **An inverted-hull outline** pushes in device pixels after projection, or its
+  width changes with aspect. A smooth normal bisects a corner, so push √2 times
+  the width near by and taper to 1 toward the fog, or distant actors turn to ink.
+  Scale the push by an instance's own scale, or shrinking pieces end as dots.
+- **Cosmetic physics stays out of the sim's hash,** in a world of its own, with a
+  test that the hash is the same with and without it. Step it once per sim tick
+  with that tick's state, so a hit-stop freezes it and a kinematic stand-in moves
+  at its true speed. A stand-in that jumps further than a tick's travel is placed,
+  not swept, or it launches what it passes.
+- **Warm shaders when the run is built.** `renderer.compile` walks hidden meshes
+  too, and a material turned transparent to fade is a second program. Check with
+  `renderer.info.programs` that the first hit compiles nothing new.
+
+## Test browsers are silent
+
+A test browser plays through the machine's speakers, and neither engine's mute
+covers it. Every e2e case takes a shared fixture whose init script puts each
+`AudioContext` destination behind a zero gain, and every probe, bench or
+screenshot browser adds the same script. Spy on playback by wrapping that stub.
+
 ## Platform SDKs behind one adapter
 
 Ads, storage, leaderboards and analytics differ per portal (Poki, CrazyGames,

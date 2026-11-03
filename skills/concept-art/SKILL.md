@@ -30,8 +30,8 @@ review as hand-made work and is logged.
   It writes `art/concept/<slug>-N.png` and never overwrites earlier images. It logs every call,
   with each file's sha256, and every pick to `art/provenance.jsonl`.
 - **The key** is read from `OPEN_ROUTER_API_KEY` and never printed.
-- **Cost:** about $0.14 an image (gemini-3-pro-image, October 2026). Use `--dry-run` to review a
-  prompt for free.
+- **Cost:** about 14 US cents an image (gemini-3-pro-image, October 2026). Use `--dry-run` to review
+  a prompt for free.
 
 ## The chain for one asset
 

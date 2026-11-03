@@ -123,6 +123,17 @@ writes `bar.json`, a per-view bar set just inside the good model's own numbers.
   - dark flares over dark tyres;
   - 15% shrinks of small parts.
 
+**A part you leave off moves every edge.** `compare.py` centres each view on its silhouette's box, so
+a sheet's chute left out of a model narrows the box and shifts the whole view: on one crusher, a
+perfect model of everything else could score no better than IoU 0.88. Before building, score the
+concept's own silhouette with the part removed. That is the ceiling, and it tells you whether a
+gameplay departure (a part kept inside a collider) can pass at all. Where a departure is deliberate,
+calibrate that view on the model as built and record the ceiling and each departure's cost beside
+the bar. Any other shortfall is fixed in the model.
+
+**Sheets can contradict themselves.** One view may close a gap another leaves open. Pick a master
+view, follow it, and record what that costs the other.
+
 ## The hero review
 
 Put `hero.png` beside the hero concept. Use `--hero x,y,z` to match the concept's angle. List
