@@ -11,8 +11,9 @@ import { SKIP_DIRS } from './stacks.mjs';
    A code line is neither blank nor comment-only. Limits: 400 source, 600
    tests, 200 React components (.tsx/.jsx under a --react dir), 800 with a
    valid waiver. Generated files, data-only files and minified bundles are not
-   sized. Exits 1 when anything is over. */
-const LIMITS = { source: 400, test: 600, component: 200, ceiling: 800 };
+   sized. Exits 1 when anything is over. Source files past the 350 soft line
+   are listed as a note, never a failure: each needs its next seam named. */
+const LIMITS = { source: 400, test: 600, component: 200, ceiling: 800, soft: 350 };
 const JS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts', '.vue', '.svelte']);
 const PY = new Set(['.py']);
 const TEST = /(\.(test|spec)\.[cm]?[jt]sx?$)|((^|\/)test_[^/]+\.py$)|(_test\.py$)|((^|\/)(e2e|tests?|__tests__)\/)/;
@@ -93,6 +94,7 @@ const walk = (dir, out = []) => {
 
 export function oversized(root, reactDirs = []) {
   const over = [];
+  const near = [];
   for (const abs of listFiles(root)) {
     const rel = relative(root, abs).split(sep).join('/');
     const ext = extname(abs);
@@ -104,7 +106,10 @@ export function oversized(root, reactDirs = []) {
     const isTest = TEST.test(rel);
     const isComponent = !isTest && /\.[jt]sx$/.test(rel) && reactDirs.some((d) => abs.startsWith(d + sep));
     const limit = isTest ? LIMITS.test : isComponent ? LIMITS.component : LIMITS.source;
-    if (lines <= limit) continue;
+    if (lines <= limit) {
+      if (limit === LIMITS.source && lines > LIMITS.soft) near.push({ rel, lines, limit });
+      continue;
+    }
     const waiver = head.map((l) => WAIVER.exec(l)).find(Boolean);
     if (waiver && !isComponent && lines <= LIMITS.ceiling && (waiver[1] !== 'E' || /bench/i.test(waiver[2]))) continue;
     let note = '';
@@ -113,7 +118,8 @@ export function oversized(root, reactDirs = []) {
     else if (waiver) note = 'E waiver must name its benchmark';
     over.push({ rel, lines, limit, note });
   }
-  return over.sort((a, b) => b.lines - a.lines);
+  const byLines = (a, b) => b.lines - a.lines;
+  return { over: over.sort(byLines), near: near.sort(byLines) };
 }
 
 // Real paths: ~/.claude/skills reaches this script through a link that argv[1] keeps.
@@ -121,8 +127,13 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
   const args = process.argv.slice(2);
   const reactDirs = args.flatMap((a, i) => (args[i - 1] === '--react' ? [a] : []));
   const root = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--react') ?? '.';
-  const over = oversized(root, reactDirs);
-  for (const f of over) console.log(`${String(f.lines).padStart(6)} / ${f.limit}  ${f.rel}${f.note ? `  (${f.note})` : ''}`);
+  const { over, near } = oversized(root, reactDirs);
+  const row = (f) => `${String(f.lines).padStart(6)} / ${f.limit}  ${f.rel}${f.note ? `  (${f.note})` : ''}`;
+  for (const f of over) console.log(row(f));
   console.log(over.length ? `\n${over.length} file(s) over their limit` : 'every file within its limit');
+  if (near.length) {
+    console.log(`\nnote: ${near.length} file(s) past the ${LIMITS.soft} soft line - name the seam each would split along (a prompt to plan, not a limit)`);
+    for (const f of near) console.log(row(f));
+  }
   process.exit(over.length ? 1 : 0);
 }
