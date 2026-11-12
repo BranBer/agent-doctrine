@@ -40,8 +40,10 @@ grow without its neighbours growing with it.
 
 ### 2. Size: 400 code lines per hand-written file
 
-Tests 600; React components 200. Section "The size rule" below has what
-counts, the exceptions and the waiver.
+Tests 600; React components 200. Past about 350, name the seam the file would
+split along; every split made to fit names what the new unit owns. Section
+"The size rule" below has what counts, the soft line, the exceptions and the
+waiver.
 
 ### 3. Logic does not import the framework
 
@@ -200,6 +202,29 @@ worse. So the limit always comes with the folder model, which says where
 split-out code goes, and the review questions below, which catch a split that
 only moved lines around.
 
+### The soft line: about 350
+
+When a change takes a file past about 350 of its 400 code lines, the report or
+commit names the seam it would split along - what the next unit would own:
+
+> `sim/world/index.ts` is at 362. Next seam: `spawning.ts`, owning placing and removing entities.
+
+It is a prompt to plan, not a second limit; nothing has to split at 350. A
+file left at 395 makes whichever change next crosses 400 split it mid-task, in
+a hurry, at whatever cut is nearest. Named early, the seam is waiting when
+400 comes.
+
+### Name the seam when you split
+
+Every split or move made to meet the limit gets one line in the report or
+commit saying what the new unit is responsible for:
+
+> `place()` moves to `spawning.ts`: one placement path, called by spawning and by destruction.
+
+If the only reason you can give is the line count, you have not found a seam.
+Moving a helper so a file lands at 399 instead of 402 is line-shaving, not
+design; a file that reaches 400 splits along the seam named at 350.
+
 ### When a file genuinely needs more than 400 lines
 
 Only when decomposing further makes the code worse. Five cases:
@@ -265,7 +290,12 @@ What a reviewer checks, and the bad split each question catches:
 | Interface segregation | a split that exposes internals so the halves can talk | Does anything import past a unit's entry? Does an entry export far more than its callers use? |
 | Dependency inversion | logic reaching for the framework; shared code reaching into a unit | Does logic import the framework, or an SDK outside its adapter? Does anything in `utils/` import a unit? |
 | (all) | `a.ts` and `b.ts` importing each other | Is there an import cycle? |
-| Folders | a drawer, or bloat | Is anything in `misc`, `helpers` or `common`? Is there a folder holding one file? |
+| Folders | a drawer, or bloat | Is anything in `misc`, `helpers` or `common`? Under any name, does a file hold helpers with no subject of their own, grouped only because they had to go somewhere? Is there a folder holding one file? |
+| Seams | a split or move made only for the count | Does each split or move made to meet the limit say, in one line of the report or commit, what the new unit owns? Did a change take a file past about 350 without naming its next seam? |
+
+**A split or move whose only stated reason is the line count is a Minor
+finding**, even when the new home happens to be fine: the code may be right,
+but nothing says why, and the next change will shave again.
 
 **Listing files by size** takes one command per stack, run from the project
 root. They are a quick count and read slightly high - docstrings and the inside

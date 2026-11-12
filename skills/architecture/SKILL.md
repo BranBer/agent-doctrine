@@ -1,6 +1,6 @@
 ---
 name: architecture
-description: How to decompose code under the doctrine - find the seam before splitting, the five-step split test, then where each piece goes - private to its unit (the unit becomes a folder) or general purpose (a subject unit in utils). Covers a registry instead of a switch, a pure core inside an effectful shell, entry points per language, promotion to utils on the second user, and when a size waiver is legitimate. Use when a file is over its limit, when splitting or extracting code, or when deciding where code belongs.
+description: How to decompose code under the doctrine - find the seam before splitting, the five-step split test, then where each piece goes - private to its unit (the unit becomes a folder) or general purpose (a subject unit in utils). Covers a registry instead of a switch, a pure core inside an effectful shell, entry points per language, promotion to utils on the second user, and when a size waiver is legitimate. Use when a file is over its limit or past the 350 soft line, when splitting or extracting code, or when deciding where code belongs.
 ---
 
 # Architecture
@@ -16,7 +16,7 @@ came from.
 
 ## The procedure
 
-1. **Find the seams** with the split test below.
+1. **Find the seams** with the split test below, and write each as one line.
 2. **Place each piece** - private to its unit, or a subject in `utils/`.
 3. **Give the unit an entry** - the one file outsiders import.
 4. **Check the result** against `doctrine`'s Reviewing table.
@@ -27,6 +27,12 @@ ones (see "Waivers"). That is rare; look harder first.
 ## The split test
 
 Walk these in order. Each one that applies is a seam.
+
+Write each seam you cut as one line in the report or commit, saying what the
+new unit owns: "`spawning.ts` owns placing and removing entities." If the only
+line you can write is the count - "moved so the file fits" - you have not found
+a seam; walk the test again. The same line, written when a file passes about
+350, is the plan for its next split.
 
 ### 1. Different reasons to change
 
@@ -199,6 +205,7 @@ the ceiling** even with a waiver. React components never take one.
 ## Checking the result
 
 - Every file within its limit, or carrying a valid waiver.
+- Every new unit has its one line in the report or commit, saying what it owns.
 - Nothing imports past an entry.
 - No two files import each other, directly or around a loop.
 - Nothing in `utils/` imports from a purpose folder.

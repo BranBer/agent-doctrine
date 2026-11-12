@@ -107,7 +107,9 @@ or context's return). None applies? Leave it a plain `const`.
      `src/components/`, imported as `@/components/CardHeader`.
 
 Don't split by arbitrary line count into `Part1`/`Part2`. If there's no seam,
-the component is doing two jobs - find them, name them.
+the component is doing two jobs - find them, name them. The name goes in the
+report or commit, one line per new piece saying what it owns; "so it fits" is
+not a seam.
 
 ## Hook
 
@@ -239,6 +241,8 @@ Anything crossing a folder boundary uses `@/`.
 ## Before you call it done
 
 - [ ] no component over 200 code lines, no other file over 400
+- [ ] each split says in the report or commit what the new piece owns; a
+      non-component file past 350 names its next seam
 - [ ] every component/hook/provider folder has an `index.ts`
 - [ ] props typed in a sibling `types.ts`, imported with `import type`
 - [ ] no `../` chains in imports

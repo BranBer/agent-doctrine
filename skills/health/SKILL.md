@@ -59,7 +59,7 @@ minute or two when the security-pattern scan is not wanted.
 | `lint` | lint and smells | ESLint with typescript-eslint and SonarJS rules, summarised by rule and file | JS/TS | no |
 | `ruff` | lint, smells, security | ruff, including bandit's `S` security rules and `C90` complexity; the project's own ruff config if it has one | Python | no |
 | `unused` | unused code | knip; vulture | JS/TS; Python | no |
-| `sizes` | file sizes | the doctrine's limits - 400 source, 600 tests, 200 React components, 800 waived | any | no |
+| `sizes` | file sizes | the doctrine's limits - 400 source, 600 tests, 200 React components, 800 waived - and a note, never a failure, of source files past the 350 soft line | any | no |
 | `duplication` | copy-paste | jscpd, listing each clone | any | no |
 | `secrets` | committed secrets | gitleaks, over the git history | any git repo | yes |
 | `deps` | vulnerable dependencies | OSV-Scanner, reading the lockfiles (npm, PyPI and more, no account) | any | no |
