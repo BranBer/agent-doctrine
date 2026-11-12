@@ -295,7 +295,8 @@ What a reviewer checks, and the bad split each question catches:
 
 **A split or move whose only stated reason is the line count is a Minor
 finding**, even when the new home happens to be fine: the code may be right,
-but nothing says why, and the next change will shave again.
+but nothing says why, and the next change will shave again. A file taken past
+about 350 with no seam named is Minor too: the soft line is a plan, not a limit.
 
 **Listing files by size** takes one command per stack, run from the project
 root. They are a quick count and read slightly high - docstrings and the inside
