@@ -189,6 +189,17 @@ did not run is reported as not run, never as passed.
   too, and a material turned transparent to fade is a second program. Check with
   `renderer.info.programs` that the first hit compiles nothing new.
 
+## Feel, pacing and sound
+
+Three skills carry what makes a playable loop feel alive:
+
+- `combat-feel` covers hit feedback, enemy reactions and the gore setting.
+- `intensity-director` covers when threats arrive, inside waves.
+- `game-audio` covers sourcing, the Web Audio engine and the adaptive score.
+
+Like the rest of the sim, the director runs headless and deterministic. Hit-stop counters belong
+to the sim; shake, flash, debris and music belong to render.
+
 ## Test browsers are silent
 
 A test browser plays through the machine's speakers, and neither engine's mute
