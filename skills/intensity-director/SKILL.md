@@ -98,6 +98,23 @@ special itself:
 - No specials before wave 2, none in the first 12–20 s of a wave, none during a boss. At most
   half the player count (rounded up) alive at once.
 
+## Elites and spawners (Diablo II's rules, adapted)
+
+Diablo II's champion and unique packs stay readable in a crowd, and its rules carry over to any
+horde game (Blizzard's data-file guide; the Arreat Summit):
+
+- **Each modifier gets one visual tell, one sound and one counter.** "Extra fast" runs and
+  glows; an aura shows a ring; the player always knows which answer to reach for.
+- **An elite's aura passes to its escort** and fizzles when the elite dies, which makes the elite
+  the target.
+- **Elites shrug off hard crowd control:** minions freeze, champions are stunned a fraction of the
+  time, then briefly immune. A boss stun-locked by one player is no fight for the other three.
+- **Spawners get their own capped budget,** apart from the wave's. Brood-like enemies that spawn
+  from a shared budget pile into a wall that can't be cleared; the d2r-mobile authors measured
+  exactly that in an endless mode they added.
+- **Scale by party size gently:** monster health rose by half per extra player in Diablo II, and
+  kill rewards were shared only within range, so players had a reason to stay close.
+
 ## Determinism
 
 The director decides spawns, so it is part of the simulation:

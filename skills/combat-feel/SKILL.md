@@ -102,11 +102,24 @@ the gore setting exists.
   Build a set per material pair, such as blade on bone, shield on plate, or fire on flesh.
 - **The attack and the impact are different sounds.** Diablo IV's fire bolt has a cast
   one-shot, a looping flight and an impact *(sourced)*.
-- **Enemy voices:** attack grunts, pain, death. Keep fewer of them than hits, with a cooldown
-  per type.
+- **The impact sound starts on the impact.** Library takes often hold the swing before the hit;
+  cut them to start a few milliseconds before their peak, or the reward lands a tenth of a second
+  late.
+- **Enemy voices:** attack grunts, pain, death. Keep fewer of them than hits: pain on a quarter
+  of hits with 350 ms between, deaths 150 ms apart (Diablo II plays attack sounds by chance, not
+  every time).
+- **Reward a crowd, not each body.** Several of the player's kills at once play as one kill
+  sound, two semitones higher per extra kill; a combo or chain climbs a scale, Peggle style.
+- **Silence before a big hit.** DOOM's Gauss rifle cuts to near silence for an instant before
+  the shot; a slam or a meteor lands harder after a short dip in everything else.
+- **A sound the player makes constantly sits high and short.** A low blip on every shot, three
+  times a second, became most of a mix's mud.
 - **Priority:** the player's impacts first, then threats to the player, then the crowd. A
   voice cap with stealing and ducking keeps 100 enemies from turning into mud. Diablo IV and
   Overwatch both run an "importance" system.
+- **Place every sound from the player's hero.** Without distance falloff, a fight across the map
+  is as loud as one beside you, and a horde is "overwhelming". `game-audio` has the curves and the
+  measured checks; no sound change is done until the mix is measured.
 - `game-audio` covers the engine: buses, the voice cap, loudness and sourcing.
 
 ## The gore setting

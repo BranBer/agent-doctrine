@@ -200,6 +200,23 @@ Three skills carry what makes a playable loop feel alive:
 Like the rest of the sim, the director runs headless and deterministic. Hit-stop counters belong
 to the sim; shake, flash, debris and music belong to render.
 
+**A change meant to add quality, done badly, takes fun away.** One prototype's second build
+added a director, an adaptive score, a combat-feel pass and new mechanics at once, and its
+player stopped early: "the edits made the game less enjoyable". From that:
+
+- **Measure what Claude can't sense before it ships.** Sound was built by reading code and never
+  heard; the mix that reached the player had every sound at full volume from anywhere. Record and
+  measure it with `game-audio`'s mix check, then let the person listen.
+- **An upgrade never takes control away.** A multishot card fanned arrows away from the aim
+  point, so every shot missed what the player pointed at. Spread is a gap at the target, and the
+  aimed shot stays on the aim line. Diablo II's own controller multishot had the same bug.
+- **A cost the player never sees is no cost.** A hungry upgrade drained a villager the player
+  never saw: "why should they care?" Put a trade-off on the field, where the player already
+  looks. There, the enemies glow with the power the player took. Diablo II shows a curse on its
+  target, not in a menu.
+- **Give each new feel or system change a switch in the tuning panel,** so a player who finds the
+  game worse can turn them off one by one and say which one did it.
+
 ## Test browsers are silent
 
 A test browser plays through the machine's speakers, and neither engine's mute

@@ -1,14 +1,21 @@
 ---
 name: game-audio
-description: Use when adding, sourcing or mixing sound effects or music for a game, especially a web game - where to get SFX and music and on what licence (free libraries, Sonniss, Freesound, Kenney, AI generators like ElevenLabs or Stable Audio, AI music like Eleven Music, Lyria or Suno), attribution and provenance, Steam's AI disclosure, a Web Audio engine (unlock, buses, voice limits, priority, ducking, variation, loudness, formats, Safari and iOS), or an adaptive score that follows combat intensity (stems, layers, bar-quantised changes, stingers).
+description: Use when adding, sourcing, designing or mixing sound effects or music for a game, especially a web game - where to get SFX and music and on what licence (free libraries, Sonniss, Freesound, Kenney, AI generators like ElevenLabs or Stable Audio, AI music like Eleven Music, Lyria or Suno), cutting multi-take library files into one-shots, attribution and provenance, Steam's AI disclosure, a Web Audio engine (unlock, buses, voice limits, priority, ducking, variation, loudness, formats, Safari and iOS), mixing a dense game (distance falloff from the player's hero, panning, rationing a crowd, music under the effects), checking a mix without ears by recording and measuring it, or an adaptive score that follows combat intensity (stems, layers, AI-made intensity stems, bar-quantised changes, stingers). Use it whenever sound is "overwhelming", "muddy", "too loud", "not satisfying" or "all at once".
 ---
 
 # Game audio
 
 Sound is half of how a hit feels, and a score that follows the fight makes a run feel alive.
 This skill covers where sounds come from and on what terms, the engine that plays them in a
-browser, and an adaptive score. `references/sourcing.md` has the full licence table, the AI tool
-terms and the provenance schema.
+browser, the mix, how to check a mix you can't hear, and an adaptive score.
+
+| File | Holds |
+|---|---|
+| `references/sourcing.md` | the licence table, AI tool terms, the provenance schema |
+| `references/mixing.md` | the full mix spec, the probe contract, the checks and what they found |
+| `references/adaptive-music.md` | AI intensity stems: tools, the pipeline, the stem checks |
+| `scripts/mixcheck.py` | measures a recorded mix against the checks |
+| `scripts/slice.py` | cuts multi-take library files into measured one-shots |
 
 ## Sourcing: free first, AI to fill gaps
 
@@ -20,7 +27,18 @@ terms and the provenance schema.
 | Gore (mature setting) | your own wet foley (celery, cabbage, wet towel), CC0 | ElevenLabs (paid plan) |
 | Magic, explosions | Sonniss, Kenney | ElevenLabs or Stable Audio, layered with CC0 booms |
 | Creature voices | Sonniss creature libraries, Freesound CC0, heavy processing | ElevenLabs; avoid text-to-speech |
-| Music | a pack with intensity stems | Eleven Music, then stem-split and edited by hand; Lyria only for ideas |
+| Music | a pack with intensity stems | Eleven Music: generate the full intense mix, then split it downward into stems (`references/adaptive-music.md`); Lyria only for ideas |
+
+**Sonniss GDC bundles:**
+- The download links sit behind a Cloudflare browser check that refuses curl, so open them in
+  the user's own browser.
+- Each library gives only two to four files, and many files hold several takes. Cut them with
+  `scripts/slice.py`. It splits on silence, starts each hit just before its peak (a hit must land
+  on the hit, not after a swing), and keeps the sharpest varied takes. It also logs where every
+  take came from. A person still listens to the shortlist.
+- The licence (v2.0) forbids supplying the sounds on their own and any AI training or use. So
+  never push a repo that holds them to a public host, never publish them in a page of their own,
+  and never feed them to an AI tool.
 
 **Rules that keep a commercial game safe:**
 - Never use **non-commercial** (CC BY-NC) material in an ad-supported game. That rules out
@@ -55,17 +73,18 @@ licence page before you rely on it.
     mutes everything;
   - suspend when the tab is hidden and during ads.
 - **Buses:** master ← music, SFX and UI, with SFX split into player, enemies and world. Each bus
-  is a gain node, and a limiter goes on the master.
-- **The voice cap:** about 24 voices in total, with a cap per sound and per bus. When full,
-  steal the lowest-priority voice. Priority runs player impacts first, then threats to the
-  player, then the crowd, then ambience.
+  is a gain node for its level, then a duck stage. A limiter on the master is only a safety.
+- **The voice cap:** 32 voices on desktop, 24 on mobile, with a cap of 3 per sound and a 30 ms
+  gap between copies of one sample. When full, steal the lowest priority, then the quietest after
+  distance. Priority runs the player's own sounds first, then threats to the player, then the
+  crowd, then ambience. Count steals of the player's sounds: any means the cap is too low.
 - **Variation:** 4–6 variants per sound, never the same one twice running, pitch ±6% (through
   `playbackRate`), and gain ±1.5 dB.
-- **Ducking:** the player's impacts duck the crowd 3–6 dB for about 150 ms. Big spells and
-  stingers duck the music.
+- **Ducking:** on each bus's duck stage, taking the deepest duck, never the sum. Ducking a
+  bus's own gain from its current value drifts: overlapping ducks leave it stuck low.
 - **Loudness:**
-  - no browser standard exists, so aim for −16 to −18 LUFS for music and a true peak of −1 dBTP;
-  - normalise short sound effects by peak and trim them by ear against the music;
+  - no browser standard exists; aim for −16 LUFS ±2 for the whole mix and a true peak of −1 dBTP;
+  - normalise short sound effects by peak, and set their levels by measuring the mix (below);
   - normalise a cue's full mix, then apply the same gain to all of that cue's stems.
 
   ffmpeg's `loudnorm` does this in two passes; the commands are in the reference.
@@ -78,6 +97,45 @@ licence page before you rely on it.
   CrazyGames caps the initial download at 50 MB, or 20 MB for the mobile home page.
 - **Loops:** MP3 and AAC pad the start and end, which makes loop seams audible. Loop in Opus
   with `loopStart`/`loopEnd`, and test the seam in all three browser engines.
+
+## The mix
+
+A horde game's first mix failed its playtest: "all the sounds play all at once regardless of how
+close i am to the origin. its overwhelming." `references/mixing.md` has the full spec. In short:
+
+- **Place every sound, measuring distance from the player's hero, not the camera.** A camera
+  37 m up makes the whole field sound equally near. Each kind of sound gets a falloff curve: the
+  player's own at full, allies and enemies quieter toward the screen's edge and silent past it,
+  big blasts carrying further. Threats, such as a champion, the objective or a grabbed ally, have a
+  floor so they're heard from anywhere. Distant sounds lose their highs. Pan by the screen,
+  capped at 0.6.
+- **Ration the crowd.** One sound per tick for crowd deaths, from the nearest; pain cries on a
+  quarter of hits, then 350 ms of quiet; several of the player's kills at once climb in pitch.
+- **The hierarchy, by measurement:** the player's own hits at least 3 dB over everything else;
+  the music 8 ±2 LU under the effects in combat and forward in lulls; each music tier
+  level-matched, so intensity comes from density, not volume.
+- **Watch the frequent sounds.** One 320 Hz blip on every arrow, three times a second, was most
+  of a mix's mud. A sound the player triggers constantly should be short and sit high.
+- **Compress only where the peaks are.** A gentle, fast compressor on the player's bus lets the
+  mix come up. On the crowd it raised the crowd's average against the player's hits.
+
+## Checking a mix without ears
+
+Claude can't hear the game. A mix built by reading code shipped to a player overwhelming and
+unsatisfying, and the player stopped playing. So no sound change is done until it's measured:
+
+1. **Record real play.** The project supplies a probe: a silent headless browser that plays a
+   scripted stretch of a run and records the master, each bus and a trace of voices, limiter
+   reduction, the music tier and the game phase. Use AudioWorklet recorders that all start on the
+   same frame. The contract is in `references/mixing.md`.
+2. **Measure it** with `scripts/mixcheck.py`: loudness and true peak, the limiter as a safety,
+   the player over the rest, the music under the effects, tier levels, voices, onset density,
+   lull contrast and mud. A check that didn't run says so.
+3. **Look at the pictures** it saves: the loudness plot puts every bus on one chart, and the
+   spectrogram shows mud as a warm smear where separate hits should be.
+4. **Take two captures.** No two runs play the same fight; a change is real when both agree.
+5. **Then the person listens,** on laptop speakers and a phone. An AI model as a second ear is
+   advisory at most: Gemini's API hears in mono at a low bitrate.
 
 ## The adaptive score
 
@@ -120,14 +178,19 @@ behind a GUI. In a browser it takes about 200 lines.
     decoded;
   - on mobile, use mono beds or shorter loops.
 - **Placeholders before real music:** layers synthesised in Web Audio (drone, pulse, drums and
-  stabs on the same bar clock) prove the system works before money is spent on stems.
+  stabs on the same bar clock) prove the system works before money is spent on stems. Keep them
+  quiet and high-passed: a placeholder that is too loud ruins the playtest it was meant to serve.
+- **Real stems from AI:** generate the full intense mix and split it into stems, so the layers
+  share tempo, key and chords by construction. Then check that they blend: the same length to the
+  sample, in phase, in key bar by bar, clean loop seams, and loudness rising 1–4 LU a tier.
+  `references/adaptive-music.md` has the tools, the pipeline and the checks.
 
 ## Testing
 
 - **Test browsers are silent** (see `games-doctrine`): wrap the context's output in a gain
-  of zero.
-- **Log the music tier and the bus voice counts** to a trace, and replay a recorded intensity
-  trace through the music offline.
+  of zero. A probe that records still silences the output after its tap.
+- **Unit-test the placement** (`gainDb` for each curve at a few distances) and record a mix
+  capture for every sound change (above).
 - **Listen on laptop speakers and a phone,** where most players will be.
 
 ## Related skills
