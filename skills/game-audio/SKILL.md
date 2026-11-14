@@ -16,6 +16,7 @@ browser, the mix, how to check a mix you can't hear, and an adaptive score.
 | `references/adaptive-music.md` | AI intensity stems: tools, the pipeline, the stem checks |
 | `scripts/mixcheck.py` | measures a recorded mix against the checks |
 | `scripts/slice.py` | cuts multi-take library files into measured one-shots |
+| `scripts/sfxgen.py` | generates sound effects with ElevenLabs from a prompt plan, logging each take's provenance |
 
 ## Sourcing: free first, AI to fill gaps
 
