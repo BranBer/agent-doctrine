@@ -23,7 +23,7 @@ One number per player, 0 to 1.
 |---|---|---|
 | Damage taken | in proportion to the damage | +1.5 × damage / max health, capped at +0.5 per hit |
 | Going down | jumps to 1 on the first incapacitation | set to 1 |
-| Pinned or grabbed by a special | arrives as damage | +0.35 when the pin starts |
+| Pulled, pushed or grabbed by an enemy | "pulled/pushed off of a ledge by the Infected" is its own input | +0.35 when a pin or grab starts |
 | An enemy dying near you | more the closer it is | +0.03 × (1 − d / 10 m); a boss nearby +0.25 |
 | The objective taking damage | (not in L4D) | +1.5 × damage / objective max, to everyone |
 
@@ -153,7 +153,9 @@ experience").
 
 ## Sources
 
-- M. Booth, "The AI Systems of Left 4 Dead" (Valve, 2009): https://cdn.fastly.steamstatic.com/apps/valve/2009/ai_systems_of_l4d_mike_booth.pdf
+- M. Booth, "The AI Systems of Left 4 Dead" (Valve, 2009), slides 78–87: the intensity model (80),
+  the cycle (81), what each state allows (82), and graphs of intensity against the live population
+  (84–87): https://steamcdn-a.akamaihd.net/apps/valve/2009/ai_systems_of_l4d_mike_booth.pdf
 - M. Booth, "Replayable Cooperative Game Design: Left 4 Dead" (GDC 2009): https://cdn.fastly.steamstatic.com/apps/valve/2009/GDC2009_ReplayableCooperativeGameDesign_Left4Dead.pdf
 - Valve's decompiled L4D2 director scripts and cvar dumps, which hold the tunable names and defaults: https://github.com/jacob404/Official-Vscripts-Decompiled
 - Mike Morasky on L4D2's music (2011): https://www.audiogang.org/interview-with-valves-mike-morasky/
