@@ -1,6 +1,6 @@
 ---
 name: games-doctrine
-description: How to build TypeScript web games with Phaser or Three.js and Vite under the doctrine - purpose folders (sim, systems, scenes, render, platform, levels), a headless simulation that never imports the renderer, scenes as thin shells over systems, a fixed-step loop, seeded randomness, pools, and platform SDKs behind one adapter. Use when writing or reviewing game code.
+description: How to build TypeScript web games with Phaser or Three.js and Vite under the doctrine - purpose folders (sim, systems, scenes, render, platform, levels), a headless simulation that never imports the renderer, scenes as thin shells over systems, a fixed-step loop, seeded randomness, pools, platform SDKs behind one adapter, the prototype lane before a game is proven fun, and which check proves which change. Use when writing or reviewing game code, including a first prototype.
 ---
 
 # Games doctrine
@@ -107,6 +107,56 @@ on screen said what to do. Before asking anyone to judge feel:
   appears on screen and is heard.
 - **The controller looks at every picture as a player would,** beside the
   concept. Builds that pass every test have still looked wrong.
+
+## The prototype lane
+
+Until the user has played a game's core loop and said to keep it, its build is
+a throwaway that answers one question: is this fun? One game got a 733-line
+spec, 31 reviewed tasks and full test suites before its first feel gate, and
+failed two.
+
+- **A one-page brief, approved before the build.** It holds:
+  - the question the prototype answers, and what would kill the idea;
+  - the pitch in one sentence, and the user's own words, verbatim;
+  - the core loop in two to four bullets, the goal and the fail state;
+  - at most seven features, what is out of scope, and the build order, riskiest first;
+  - the first minute of play.
+
+  Mark anything Claude filled in as a guess.
+- **Relaxed:** the size and folder rules, comment density, test depth and
+  per-task reviews.
+- **Kept, so checks can attach later:** the headless sim behind `step` and
+  `state`, the fixed step, seeded randomness, every tuning number in one data
+  file, and silent test browsers.
+- **Kept apart:** the code lives in `prototype/`, each file starts with
+  `// PROTOTYPE - NOT FOR PRODUCTION`, and nothing outside imports it.
+- **Placeholder art is CC0 and not AI-made,** such as Kenney or KayKit packs.
+  [patch.gg](https://patch.gg)'s index finds them (`license=CC0-1.0&ai=false`).
+  Download each from its original source and record it in a provenance file.
+  Grey boxes do as well, so long as the player can tell who is who.
+- **Timebox:** playable within two or three days. Two hours with nothing
+  playable means the question is too big; shrink it.
+- **After each play, the user's verdict:** proceed, pivot or kill, with a few
+  lines on what happened in their words. Three pivots on one concept force a
+  kill decision. A build nobody has played is not assessed, never passed.
+- **Proceed means rewrite.** The real game starts fresh under the full
+  doctrine, with what the prototype taught and none of its code.
+
+The lane, the verdicts and the check table below adapt ideas from Claude Code
+Game Studios (MIT).
+
+## Which check proves which change
+
+| Change | Proof |
+|---|---|
+| A sim rule | A headless test. |
+| Anything the player sees | Launch at a fixed size, reach the state by URL, take a screenshot and open it. Report OBSERVED, or NOT VERIFIED and why. It covers the look, not the feel. |
+| What the sim does over a run | A seeded replay compared with the last accepted one. |
+| Performance | A bench under CPU throttling. |
+| Feel, balance, a whole session | The user playing it. Never automated, and no feel verdict before they have played. |
+
+In the prototype lane only the second and last rows are required. A check that
+did not run is reported as not run, never as passed.
 
 ## What keeps a 3D scene believable
 

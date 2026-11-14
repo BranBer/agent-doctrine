@@ -91,6 +91,8 @@ an answer leaves a pillar open.
   A world where a power changes nothing reads as a painted backdrop.
 - **No side is uniformly evil.** Give every faction ordinary members and internal arguments. A
   monstrous enemy still needs a reason, even an inhuman one.
+- **When a draft contradicts canon,** show both, say which is canon, and offer three fixes: change
+  the draft, change the canon (only with the author's say), or explain it in the world.
 - **Every mystery gets a written true answer,** even one that is never revealed. Hints stay
   consistent across writers and years, and players who test theories find a world that holds
   together.
@@ -145,6 +147,8 @@ For short-session games, such as browser portals:
   Read the text aloud. If it could fit any world, it fits none.
 - Humour, grit and plain speech are allowed. People in a world at war still complain about the
   food.
+- `humanize-copy` may polish `draft` and `accepted` text, store copy and devlogs. Never run it on
+  a `pillar`: its edits, such as removing em dashes, would rewrite the author's words.
 - **Keep in-game text in data files, keyed by id, never in code.** Lore edits then never touch
   logic, and translation stays possible.
 
@@ -170,8 +174,10 @@ Give each entry its status: `pillar`, `accepted` or `draft`.
 
 ## Before calling a lore milestone done
 
-1. **Contradictions.** Have a fresh reviewer read only `lore/` and list every contradiction and
-   every unanswered mystery.
+1. **Contradictions.** Have a fresh reviewer read only `lore/` and return APPROVE, CONCERNS (each
+   contradiction or unanswered mystery) or REJECT (a pillar is broken). It lists the entries it
+   checked against and anything it could not check. An approval with no list doesn't count, and
+   a check that didn't run is reported as not run.
 2. **Coverage:**
    - every mechanic has an in-world reason;
    - every entry has a channel or is marked `backstory`;
