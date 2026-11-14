@@ -76,6 +76,11 @@ the gore setting exists.
 - **The reaction ladder:** flash → flinch → stagger, which cancels the attack → knockback or
   knockdown → stun → launch → death. Pick the rung from damage against the enemy's mass or
   armour.
+- **Flinch by chance, in bands:** Diablo II (per D2MOO, a decompilation of its logic) compares a
+  hit's damage with a fraction of the target's life that depends on the kind of attack (1/8 to
+  1/64), and steps the flinch chance 0 → 37.5% → 75% → 100% above it. Heroes and monsters share
+  the rule, and a stunned target flinches on every hit. Banded chance keeps a crowd from
+  stun-locking under chip damage while big hits always land a reaction.
 - **Direction matters:** react away from the impact point, in four buckets (front, back, left,
   right).
 - **Death by damage type** (Diablo IV, "skill-driven deaths"): the killing skill picks the
@@ -164,6 +169,7 @@ Test with the CPU throttled to 4× and on a real low-end device.
 
 ## Sources
 
+- D2MOO, a decompilation of Diablo II 1.10f's game logic (MIT, partly verified against the original): https://github.com/ThePhrozenKeep/D2MOO
 - Sakurai on hit-stop (Famitsu vol. 490, 2015 translation): https://sourcegaming.info/2015/11/11/thoughts-on-hitstop-sakurais-famitsu-column-vol-490-1/
 - Smash hit-lag formulas: https://www.ssbwiki.com/Hitlag
 - Diablo IV art, skill-driven deaths (Dec 2021): https://news.blizzard.com/en-us/article/23746639/diablo-iv-quarterly-updatedecember-2021

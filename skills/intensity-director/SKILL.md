@@ -101,19 +101,29 @@ special itself:
 ## Elites and spawners (Diablo II's rules, adapted)
 
 Diablo II's champion and unique packs stay readable in a crowd, and its rules carry over to any
-horde game (Blizzard's data-file guide; the Arreat Summit):
+horde game. Sources: Blizzard's data-file guide, the Arreat Summit, and D2MOO, an MIT-licensed
+decompilation of the game's logic that is only partly verified against the original.
 
 - **Each modifier gets one visual tell, one sound and one counter.** "Extra fast" runs and
   glows; an aura shows a ring; the player always knows which answer to reach for.
 - **An elite's aura passes to its escort** and fizzles when the elite dies, which makes the elite
   the target.
-- **Elites shrug off hard crowd control:** minions freeze, champions are stunned a fraction of the
-  time, then briefly immune. A boss stun-locked by one player is no fight for the other three.
-- **Spawners get their own capped budget,** apart from the wave's. Brood-like enemies that spawn
-  from a shared budget pile into a wall that can't be cleared; the d2r-mobile authors measured
-  exactly that in an endless mode they added.
-- **Scale by party size gently:** monster health rose by half per extra player in Diablo II, and
-  kill rewards were shared only within range, so players had a reason to stay close.
+- **Elites shrug off hard crowd control:** elites are chilled where minions freeze, and stunned
+  only 10% of the time. A boss stun-locked by one player is no fight for the other three. Stack
+  at most two modifiers' immunities on one elite, so no elite shuts out more than one role's
+  answer.
+- **Spawners get their own capped budget,** apart from the wave's: cap how many of a spawner's
+  spawn are alive near it, spawn only while a hero is close, and give it a last act once spent,
+  such as a charge. Brood-like enemies that spawn from a shared budget pile into a wall that
+  can't be cleared; the d2r-mobile authors measured exactly that in an endless mode they added.
+- **Give the crowd a rhythm:** each enemy decides every 0.4–0.6 s, with a chance to attack
+  rather than a certainty, so a mob ripples instead of striking in lockstep.
+- **Tanking by position:** D2's monsters weigh no threat at all; they attack the nearest hero
+  they can see and anyone standing in their path. A taunt is one answer; a body in the doorway
+  is another that needs no button.
+- **Scale by party size gently:** monster health rises by half per extra player, damage a little
+  on harder difficulties, and kill rewards go to party members near the kill, so players had a
+  reason to stay close.
 
 ## Determinism
 
@@ -170,6 +180,7 @@ experience").
 
 ## Sources
 
+- D2MOO, a decompilation of Diablo II 1.10f's game logic (MIT, partly verified against the original): https://github.com/ThePhrozenKeep/D2MOO
 - M. Booth, "The AI Systems of Left 4 Dead" (Valve, 2009), slides 78–87: the intensity model (80),
   the cycle (81), what each state allows (82), and graphs of intensity against the live population
   (84–87): https://steamcdn-a.akamaihd.net/apps/valve/2009/ai_systems_of_l4d_mike_booth.pdf
