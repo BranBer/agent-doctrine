@@ -38,6 +38,9 @@ measured. Both are covered here.
 - **32 voices on desktop, 24 on mobile;** music on its own pool. Steal the lowest priority
   first, then the quietest after distance, then the oldest. Count steals of the player's own
   sounds: any at all means the cap is too low.
+- **A voice stopped early fades out,** never stops dead: 50 ms when stolen, 120 ms when a newer
+  copy replaces it at the per-sound cap, 80 ms when choked. A cry plays whole or not at all: at its
+  cap the new one is skipped, and it is stolen only after every other voice of its priority.
 - **Priority, highest first:** the player's damage taken, downs and wave stingers; the player's
   own attacks and hits; threats aimed at the player; ally actions and big events on screen;
   enemy hits and deaths near the player; the same farther away; foley.
@@ -48,7 +51,7 @@ measured. Both are covered here.
   | Any one sample | a 30 ms gap; a second copy inside it is skipped |
   | Enemy hit | 50 ms |
   | Enemy pain cry | a 25% chance on a hit, then 350 ms |
-  | Enemy death cry | 150 ms |
+  | Enemy death cry | 250 ms, and played whole |
   | Crowd deaths | all the deaths in one tick play as one sound, a little bigger, from the nearest |
   | The player's kills | several at once play as one, two semitones higher for each extra, up to seven |
 
@@ -98,7 +101,9 @@ stretch of a real run in a silent headless browser and saves, into one folder:
 - `music.wav`, `player.wav`, `crowd.wav`: each bus after its duck stage, so the engine exposes
   them;
 - `trace.json`: every 100 ms, `{t, tick, phase, voices, steals, highSteals, culled, reduction,
-  tier}`, with "phase" equal to "wave" while enemies come.
+  tier}`, with "phase" equal to "wave" while enemies come; and once, `plays`: for each sampled
+  sound, `{plays, variants, fixed}` counted while recording, "fixed" marking a cue meant to sound
+  the same every time.
 
 Record with an **AudioWorklet**, not a ScriptProcessorNode. The ScriptProcessor runs on the busy
 main thread and dropped about 30% of its blocks, so the stems no longer lined up. Start every
@@ -129,6 +134,11 @@ uv run --no-project --with numpy --with scipy --with soundfile --with pyloudnorm
 | 10 | Combat against the lull | p90 of combat 4–12 LU over the lull's median |
 | 11 | Mud: 200–500 Hz against 100 Hz–8 kHz | with `--reference`, ≤ +4 dB over a game the user rates well |
 | 12 | spectrogram.png and loudness.png | look at them: separate hits should show as separate lines |
+| 13 | Repetition: how soon the same take comes back, takes × seconds ÷ plays, cues left out | ≥ 4 s for every sound; under 2 s fails (ours) |
+
+Check 13 counts each layer of a layered sound on its own, so it is the strict reading: two layers
+of seven takes each come back together only once in 49 plays. Endings are a file check, not a
+capture check: `slice.py --check <dir>`.
 
 Checks 1 (the falloff curves) and 2 (a single sound placed at 2, 10, 20 and 30 m) belong in the
 project's own tests. A check that did not run is reported as not run.
@@ -156,6 +166,8 @@ bitrate, so it can't hear panning, and no published case shows a model judging a
 | The pulse layer added 5.6 LU to the score | tier trims of 0, −3, −4, −4, −4 dB |
 | Peaks from the player's hits, from a level over 1 | the player-bus compressor; master at 0.9 |
 | −19.4 LUFS, 1.4 dB under the target, to keep the true peak at −1.2 dBTP | left for the user's ears: louder needs the hits squashed |
+| "They scream in anguish and then it stops": 21 files cut while sounding, at a fixed length with a 30 ms fade, and voices stopped dead at the cap | takes end where they fall silent or on a long exponential release; early stops fade; cries play whole |
+| "Some of the sounds are repetitive": the bow string had one take, heard every 0.4 s; the death and pain cries and the tank's swing had two | 7–8 takes each and a shuffle that avoids the last half; the same take now every 3–15 s |
 
 ## Sources
 
@@ -169,3 +181,5 @@ bitrate, so it can't hear panning, and no published case shows a model judging a
 - DICE, HDR audio in Frostbite (the loudness window that culls quiet sounds), GDC talks 2009–2011
 - Game Audio Network Guild, recommended loudness for mobile: −16 LUFS ±2, −1 dBTP
 - W3C Web Audio API (DynamicsCompressorNode.reduction, PannerNode models): https://www.w3.org/TR/webaudio/
+- Audiokinetic community Q&A: shuffle "avoid repeating last 10" over 15 footsteps (https://blog.audiokinetic.com/qa/1388/saving-state-of-random-container); the short fixed kill fade (https://blog.audiokinetic.com/qa/6387/kill-voice-fade-out); killing the newest instance so lines never overlap (https://www.audiokinetic.com/qa/6770/instance-limiting-newest-remove-killed-object-random-container)
+- B. Jacobsen, "Game audio immersion", A Sound Effect: https://www.asoundeffect.com/game-audio-immersion/

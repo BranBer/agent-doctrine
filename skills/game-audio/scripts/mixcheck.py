@@ -6,7 +6,10 @@
 The capture dir holds master.wav (required) and, recorded in the same run, any of music.wav,
 player.wav and crowd.wav (bus stems) and trace.json:
     {"sampleRate": 48000, "trace": [{"t", "tick", "phase", "voices", "steals", "highSteals",
-                                     "culled", "reduction", "tier"}, ...]}
+                                     "culled", "reduction", "tier"}, ...],
+     "plays": {"<sound>": {"plays", "variants", "fixed"}, ...}}
+"plays" counts each sampled sound played while recording, with how many takes it has; "fixed" marks
+a cue meant to sound the same every time (a tuned bell), which the repetition check leaves out.
 "phase" is "wave" while enemies come and anything else in a lull. It prints one line per check -
 PASS, WARN, FAIL, INFO or NOT RUN with the reason - writes report.json and saves spectrogram.png
 and loudness.png for a person or an agent to look at. Exit code 1 when a check failed.
@@ -154,6 +157,7 @@ class Capture:
     player: np.ndarray | None
     crowd: np.ndarray | None
     trace: list[dict]
+    plays: dict[str, dict]
 
     @property
     def mono(self) -> np.ndarray:
@@ -170,9 +174,9 @@ def load_capture(cap_dir: Path) -> Capture | None:
         return None
     stems = {n: load(cap_dir / f"{n}.wav") for n in ("music", "player", "crowd")}
     trace_path = cap_dir / "trace.json"
-    trace = json.loads(trace_path.read_text())["trace"] if trace_path.exists() else []
+    doc = json.loads(trace_path.read_text()) if trace_path.exists() else {}
     mono = {n: (s[0].mean(axis=1) if s else None) for n, s in stems.items()}
-    return Capture(cap_dir, m[1], m[0], mono["music"], mono["player"], mono["crowd"], trace)
+    return Capture(cap_dir, m[1], m[0], mono["music"], mono["player"], mono["crowd"], doc.get("trace", []), doc.get("plays", {}))
 
 
 def check_realtime(c: Capture) -> None:
@@ -297,6 +301,20 @@ def check_density(c: Capture) -> None:
     report("9", "onset density", "PASS" if dens <= 12 else "FAIL", f"p95 {dens:.0f} onsets a second in combat (<= 12; uncalibrated)", p95=dens)
 
 
+def check_repetition(c: Capture) -> None:
+    """How soon the same take comes back: takes x seconds / plays, per sound, cues left out. Each layer
+    of a layered sound counts on its own, so this is the strict reading."""
+    every = {k: v["variants"] * c.seconds / v["plays"] for k, v in c.plays.items() if v["plays"] > 0 and not v.get("fixed")}
+    if not every:
+        report("13", "repetition", "NOT RUN", "no plays in trace.json")
+        return
+    worst = sorted(every.items(), key=lambda kv: kv[1])[:5]
+    low = worst[0][1]
+    detail = "; ".join(f"{k} {c.plays[k]['plays']} plays of {c.plays[k]['variants']} takes, one every {s:.1f} s" for k, s in worst)
+    report("13", "repetition", "FAIL" if low < 2 else "WARN" if low < 4 else "PASS",
+           f"the same take back no sooner than every 4 s on average (2 fails; ours). Worst: {detail}", worst=dict(worst))
+
+
 def check_contrast(c: Capture) -> None:
     st_t, st = loudness_series(c.master, c.rate)
     wave, lull = phase_mask(st_t, c.trace, True), phase_mask(st_t, c.trace, False)
@@ -376,6 +394,7 @@ def main() -> int:
     check_density(c)
     check_contrast(c)
     check_mud(c, ref_dir)
+    check_repetition(c)
     pictures(c)
     (c.dir / "report.json").write_text(json.dumps(results, indent=1, default=float))
     failed = [r for r in results if r["status"] == "FAIL"]

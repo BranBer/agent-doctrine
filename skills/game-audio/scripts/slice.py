@@ -12,12 +12,21 @@ each take), "from_peak" (s of lead-in kept before each take's loudest moment: a 
 on the hit, not after a swing), "lowcut" (Hz high-pass), "tune_to" (pitch classes such as
 ["D"] or ["F", "A"]: each kept take is resampled by the smallest shift that puts its strongest
 partial on one of them, for tonal sounds the game will never pitch-randomise), "loop" (s of
-equal-power crossfade that turns a long take into a seamless loop: a bed such as a crowd murmur).
+equal-power crossfade that turns a long take into a seamless loop: a bed such as a crowd murmur),
+"release" (s of fade for a take cut at max_len; default a quarter of its length, 30-400 ms).
 
-Writes <out dir>/<name>-<n>.ogg (mono, 48 kHz, peak -1 dBFS, a 30 ms fade at the end),
-measures.json (every take found, with what it measured and whether it was kept) and
-provenance.json (each kept file's source and offsets). A person still has to listen: the
-measures only shortlist.
+max_len is a ceiling, not a length: a take ends where it falls silent. One that runs past the
+ceiling is cut at its quietest moment in the last third before it (a breath between cries) and
+dies away like a real decay; a take still loud at the cut is named, so raise its max_len when
+the whole sound is wanted. Voices especially: a cry cut mid-breath sounds like a bug.
+
+Writes <out dir>/<name>-<n>.ogg (mono, 48 kHz, peak -1 dBFS), measures.json (every take found,
+with what it measured and whether it was kept) and provenance.json (each kept file's source and
+offsets). A person still has to listen: the measures only shortlist.
+
+    python -I slice.py --check <dir>
+
+lists the files there that stop while still sounding. A seamless loop ends loud on purpose.
 """
 
 from __future__ import annotations
@@ -96,6 +105,22 @@ def measure(t: np.ndarray) -> dict:
     }
 
 
+def quiet_cut(x: np.ndarray, a: int, cap: int) -> int:
+    """Where to end a take that runs past its ceiling: its quietest moment in the last third before it."""
+    hop = int(0.01 * RATE)
+    lo = a + (cap - a) * 2 // 3
+    if cap - lo < 2 * hop:
+        return cap
+    return lo + int(env_db(x[lo:cap], hop).argmin()) * hop + hop // 2
+
+
+def level_at(x: np.ndarray, a: int, b: int) -> float:
+    """How loud the 10 ms before b are against the loudest 10 ms of x[a:b], in dB."""
+    hop = int(0.01 * RATE)
+    env = env_db(x[a:b], hop)
+    return round(float(env_db(x[max(a, b - hop) : b], hop).max() - env.max()), 1) if len(env) else 0.0
+
+
 def collect(spec: dict) -> list[dict]:
     """Every take in the spec's source files, cut and measured."""
     found = []
@@ -109,10 +134,18 @@ def collect(spec: dict) -> list[dict]:
                 # Start just before the loudest moment: a hit sound must land on the hit, not after a swing.
                 pk = a + int(np.abs(x[a:b]).argmax())
                 a = max(a, pk - int(spec["from_peak"] * RATE))
-            b = min(b, a + int(spec.get("max_len", 1.0) * RATE))
+            cap = a + int(spec.get("max_len", 1.0) * RATE)
+            if b > cap:
+                b, cut = quiet_cut(x, a, cap), True
+            else:
+                # A take that ends still loud was stopped by its file, not finished: an AI take often
+                # stops mid-sound at the length it was asked for, and MP3 pads that with silence.
+                b = a + int(np.flatnonzero(np.abs(x[a:b]) > 1e-4)[-1]) + 1
+                cut = level_at(x, a, b) > -30
             if b - a < int(0.04 * RATE):
                 continue
-            found.append({"src": src, "start_s": round(a / RATE, 3), "end_s": round(b / RATE, 3), **measure(x[a:b]), "_t": x[a:b].copy()})
+            found.append({"src": src, "start_s": round(a / RATE, 3), "end_s": round(b / RATE, 3), **measure(x[a:b]),
+                          "cut_db": level_at(x, a, b) if cut else None, "_t": x[a:b].copy()})
     return found
 
 
@@ -173,8 +206,11 @@ def write(name: str, kept: list[dict], spec: dict, out: Path) -> dict:
         if spec.get("loop"):
             t = seamless(t, spec["loop"])
         else:
-            fade = min(len(t) // 4, int(0.03 * RATE))
-            t[-fade:] *= np.linspace(1, 0, fade)
+            # A take that fell silent on its own needs only a short fade; one cut while sounding gets a
+            # release long enough to die away. Both decay exponentially, as a real sound does (-60 dB).
+            secs = 0.03 if f["cut_db"] is None else spec.get("release", min(0.4, max(0.03, 0.25 * len(t) / RATE)))
+            fade = min(len(t) // 2, int(secs * RATE))
+            t[-fade:] *= 10 ** (-3 * np.linspace(0, 1, fade))
         t *= 10 ** (-1 / 20) / (np.abs(t).max() + 1e-12)
         fn = f"{name}-{i}.ogg"
         # Written in blocks: libsndfile's Vorbis encoder overflows the stack on Windows when handed
@@ -184,11 +220,31 @@ def write(name: str, kept: list[dict], spec: dict, out: Path) -> dict:
                 w.write(t[i : i + 16384].astype(np.float32))
         provenance[fn] = {"source": Path(f["src"]).name, "library": Path(f["src"]).parent.name, "start_s": f["start_s"],
                           "end_s": f["end_s"], "licence": spec.get("licence", ""),
-                          "edits": "mono, 48 kHz, cut, " + (f"tuned {cents:+d} cents, " if cents else "") + ("crossfaded into a loop, " if spec.get("loop") else "30 ms fade, ") + "peak -1 dBFS"}
+                          "edits": "mono, 48 kHz, cut, " + (f"tuned {cents:+d} cents, " if cents else "") + ("crossfaded into a loop, " if spec.get("loop") else f"{1000 * fade // RATE} ms fade, ") + "peak -1 dBFS"}
     return provenance
 
 
+def check(d: Path) -> int:
+    """Lists files of 0.2 s or more still within 24 dB of their peak 30-50 ms before they end: cut, not finished.
+    Shorter files are clicks and hits, all attack, and are left to the ear."""
+    bad = 0
+    for f in sorted(d.glob("*.ogg")):
+        x, rate = sf.read(f, always_2d=True)
+        x = x.mean(axis=1)
+        if len(x) < 0.2 * rate:
+            continue
+        seg = x[len(x) - int(0.05 * rate) : len(x) - int(0.03 * rate)]
+        db = 20 * np.log10(np.sqrt(np.mean(seg**2)) / (np.abs(x).max() + 1e-12) + 1e-12)
+        if db > -24:
+            bad += 1
+            print(f"{f.name}: {db:.0f} dB under its peak 40 ms before the end ({len(x) / rate:.2f} s): it stops while still sounding")
+    print(f"{bad} files end abruptly" if bad else "no file ends abruptly")
+    return 1 if bad else 0
+
+
 def main() -> int:
+    if len(sys.argv) == 3 and sys.argv[1] == "--check":
+        return check(Path(sys.argv[2]))
     if len(sys.argv) != 3:
         print(__doc__)
         return 2
@@ -205,6 +261,9 @@ def main() -> int:
         provenance |= write(name, kept, spec, out)
         measures[name] = [{k: v for k, v in f.items() if k != "_t"} | {"kept": f in kept} for f in found]
         print(f"{name}: {len(found)} takes found, kept {len(kept)}: " + ", ".join(f"{f['length_s']}s/{f['attack_ms']}ms/{f['centroid_hz']}Hz" for f in kept))
+        for f in kept:
+            if f["cut_db"] is not None and f["cut_db"] > -20:
+                print(f"  {Path(f['src']).name} at {f['start_s']}s was cut {-f['cut_db']:.0f} dB under its peak, still sounding: raise max_len for the whole sound")
     (out / "measures.json").write_text(json.dumps(measures, indent=1))
     (out / "provenance.json").write_text(json.dumps(provenance, indent=1))
     return 0

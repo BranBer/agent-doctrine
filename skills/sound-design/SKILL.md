@@ -1,6 +1,6 @@
 ---
 name: sound-design
-description: Use when designing, choosing, generating or judging a game's sound effects - what makes a sound satisfying (transient, body, layers, sub on laptop speakers, length, size, saturation, timing against the frame, variation, fatigue), how the sounds become one world (sonic pillars, a palette, sound families with shared DNA, one shared space, one processing chain, frequency slots by role, effects in the music's key and on its beat, a motif, telegraphs, silence and contrast over a run), matching sound to visual effects, and prompting AI sound generators such as ElevenLabs so takes come out as one family. Use it for "sound design", "make it sound good", "satisfying sounds", "sonic identity", "audio direction", "sound palette", or before generating or buying any sound effects.
+description: Use when designing, choosing, generating or judging a game's sound effects - what makes a sound satisfying (transient, body, layers, sub on laptop speakers, length, size, saturation, timing against the frame, variation, fatigue, how many takes, letting a sound finish), how the sounds become one world (sonic pillars, a palette, sound families with shared DNA, one shared space, one processing chain, frequency slots by role, effects in the music's key and on its beat, a motif, telegraphs, silence and contrast over a run), matching sound to visual effects, and prompting AI sound generators such as ElevenLabs so takes come out as one family. Use it for "sound design", "make it sound good", "satisfying sounds", "sonic identity", "audio direction", "sound palette", or before generating or buying any sound effects.
 ---
 
 # Sound design
@@ -39,6 +39,11 @@ the numbers marked "ours" are our own starting values. Sources are at the end.
 - **Length follows how often it plays.** At 120 BPM an eighth note is 250 ms: frequent hits stay
   inside it; a nova, a meteor or a boss slam may ring for a bar. Decay rate is the ear's main cue
   to material: wood and bone die in milliseconds, glass in about a tenth of a second, steel rings.
+- **Let it finish.** Shorten a sound by choosing a shorter take, never by cutting a long one while
+  it still sounds: a death scream cut at 1 s with a 30 ms fade read to a playtester as "they scream
+  in anguish and then it stops". When a cut is unavoidable, make it at a quiet moment, such as a
+  breath, and let it decay exponentially over a quarter of its length. Cries and lines play whole
+  or not at all.
 - **Size by formants, not just pitch.** Formant spacing tracks body size; listeners notice about
   8% difference. Shift a boss's formants down 20% or more, and keep variants of one enemy within 4%.
 - **Hyper-real for what the player causes, near-real for the world, real material processed for
@@ -51,6 +56,12 @@ the numbers marked "ours" are our own starting values. Sources are at the end.
 - **Vary impacts, fix cues.** Vary each layer of an impact separately (body and tail most, the
   click's pitch least) and never play the same take twice running. Rewards and threat cues barely
   vary (Overwatch's "minimal variation" rule), so the player learns them.
+- **Enough takes for how often it plays** (ours): 6–8 for what plays every second, such as attacks,
+  kills and crowd cries, 4–5 for what plays every few seconds, 1–3 for rare sounds and cues, so the
+  same take comes back no sooner than every 4 s. One bow string heard every 0.4 s, and two death
+  cries, made a build "repetitive". Layers multiply: five takes in each of three layers make 125
+  sounds. But every take must belong, because one odd take stands out each time it comes round
+  (B. Jacobsen). `game-audio`'s mix check measures this.
 - **The thousandth-repeat test.** Loop the most frequent sound for two minutes at game rate. What
   survives is short, mid-to-high, free of lows, quieter than the rare sounds, and less bright under
   sustained fire (Helldivers 2). Juice is an inverted U: none and extreme both test worse than
@@ -110,8 +121,10 @@ Moving a visual effect's trigger means re-checking its sound.
   distance, then the family's style phrase verbatim ("close-miked studio foley, dry, brittle dry
   bone"). Prefer positive words ("dry, close-miked") to "no reverb"; name a layer's band ("only the
   sharp crack"); a named key is a hint, so measure and re-tune.
-- **Generate layers separately** and combine them yourself. Take 8–12 of a frequent layer and
-  keep the 4–6 that share a spectrum and envelope, or derive variants from one hero take.
+- **Generate layers separately** and combine them yourself. Take 10–12 of a frequent layer and
+  keep the 6–8 that share a spectrum and envelope, or derive variants from one hero take.
+- **Ask for a longer take than you need, by 30–50%,** and say how it ends ("trails off into a last
+  breath and fades to silence"). A take stops at the length asked for, often mid-sound.
 - **Expect** leading silence, late quiet peaks (one test peaked 98 ms in), dead air, tails into
   room tone and warble. Process every take through the family chain; reject warble rather than
   repair it. A library click is the most reliable transient over an AI body.
@@ -136,8 +149,9 @@ Write it before generating or buying sounds, beside the game's other design note
 family; one motif; a shared space chosen.
 
 **Each sound:** peaks at once; layered in time and band; keeps its weight through a 200 Hz and a
-600 Hz high-pass; length suits its rate; size cues agree; saturation on the body only; cues fixed
-and impacts varied; tonal sounds tuned and never pitch-randomised; through the family chain.
+600 Hz high-pass; length suits its rate; ends on its own or on a decaying release, never cut while
+sounding; size cues agree; saturation on the body only; cues fixed and impacts varied, with enough
+takes for its rate; tonal sounds tuned and never pitch-randomised; through the family chain.
 
 **Timing:** starts on the contact tick; the player's input never quantised; big moments get a
 wind-up and a dip.
@@ -170,3 +184,4 @@ and a phone.
 - Florentine, Buus and Poulsen 1996 (JASA 99:1633), short-tone loudness; Fitch 1997 (JASA 102:1213), formants and size; Vroomen and Keetels 2020 (Cognition 204:104340), sound before contact; ITU-R BT.1359 and EBU R37, sync limits; Moliner, Ramo and Valimaki 2020 (DAFx), small-speaker bass
 - ElevenLabs Sound Effects docs and the v3 announcement, 2026-10-29: https://elevenlabs.io/docs/overview/capabilities/sound-effects
 - N. Garcia and J. Reiss, practitioners on AI sound effects, AES 2026 (arXiv 2605.27174)
+- B. Jacobsen, "Game audio immersion" (layered variation, the nuisance score), A Sound Effect: https://www.asoundeffect.com/game-audio-immersion/

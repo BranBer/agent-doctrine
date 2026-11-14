@@ -1,6 +1,6 @@
 ---
 name: game-audio
-description: Use when adding, sourcing, designing or mixing sound effects or music for a game, especially a web game - where to get SFX and music and on what licence (free libraries, Sonniss, Freesound, Kenney, AI generators like ElevenLabs or Stable Audio, AI music like Eleven Music, Lyria or Suno), cutting multi-take library files into one-shots, attribution and provenance, Steam's AI disclosure, a Web Audio engine (unlock, buses, voice limits, priority, ducking, variation, loudness, formats, Safari and iOS), mixing a dense game (distance falloff from the player's hero, panning, rationing a crowd, music under the effects), checking a mix without ears by recording and measuring it, or an adaptive score that follows combat intensity (stems, layers, AI-made intensity stems, bar-quantised changes, stingers). Use it whenever sound is "overwhelming", "muddy", "too loud", "not satisfying" or "all at once".
+description: Use when adding, sourcing, designing or mixing sound effects or music for a game, especially a web game - where to get SFX and music and on what licence (free libraries, Sonniss, Freesound, Kenney, AI generators like ElevenLabs or Stable Audio, AI music like Eleven Music, Lyria or Suno), cutting multi-take library files into one-shots, attribution and provenance, Steam's AI disclosure, a Web Audio engine (unlock, buses, voice limits, priority, ducking, variation, loudness, formats, Safari and iOS), mixing a dense game (distance falloff from the player's hero, panning, rationing a crowd, music under the effects), checking a mix without ears by recording and measuring it, or an adaptive score that follows combat intensity (stems, layers, AI-made intensity stems, bar-quantised changes, stingers). Use it whenever sound is "overwhelming", "muddy", "too loud", "not satisfying", "all at once", "repetitive", or cuts off or ends abruptly.
 ---
 
 # Game audio
@@ -15,7 +15,7 @@ browser, the mix, how to check a mix you can't hear, and an adaptive score.
 | `references/mixing.md` | the full mix spec, the probe contract, the checks and what they found |
 | `references/adaptive-music.md` | AI intensity stems: tools, the pipeline, the stem checks |
 | `scripts/mixcheck.py` | measures a recorded mix against the checks |
-| `scripts/slice.py` | cuts multi-take library files into measured one-shots |
+| `scripts/slice.py` | cuts multi-take library files into measured one-shots that end where the sound ends; `--check` lists files that stop while still sounding |
 | `scripts/sfxgen.py` | generates sound effects with ElevenLabs from a prompt plan, logging each take's provenance |
 
 ## Sourcing: free first, AI to fill gaps
@@ -79,8 +79,33 @@ licence page before you rely on it.
   gap between copies of one sample. When full, steal the lowest priority, then the quietest after
   distance. Priority runs the player's own sounds first, then threats to the player, then the
   crowd, then ambience. Count steals of the player's sounds: any means the cap is too low.
-- **Variation:** 4–6 variants per sound, never the same one twice running, pitch ±6% (through
-  `playbackRate`), and gain ±1.5 dB.
+- **Nothing stops dead.** A playtester heard skeletons "scream in anguish and then it stops", and
+  it had two causes:
+  - **The files.** The cutter capped every take at a fixed length with a 30 ms fade, so a long
+    death cry ended at 1 s, mid-scream. Let a take end where it falls silent; cut an over-long one
+    at its quietest moment and give it a release of a quarter of its length (30–400 ms), decaying
+    exponentially as a real sound does. `slice.py` does both, and `slice.py --check <dir>` lists
+    files that still stop while sounding. AI takes stop at the length asked for, often mid-sound.
+  - **The engine.** Any voice stopped early, whether replaced at the per-sound cap, choked or
+    stolen, stopped dead. Fade every early stop: 50 ms for a steal, 120 ms for a copy replaced by
+    a newer one, 80 ms for a choked bell. Wwise's own kill fade is short and fixed, and users
+    report clicks from it.
+- **Voices play whole or not at all.** When a cry's copies are full, skip the new cry rather than
+  cut an old one (Wwise users limit lines to one instance and kill the newest so lines never
+  overlap). Steal a cry only after every other voice of its priority.
+- **Variation, by how often a sound plays.** Measure how soon the same take comes back: its takes ×
+  the seconds ÷ its plays (`mixcheck.py` check 13). Aim for 4 s or more (ours). That takes about:
+  - 6–8 takes for what plays every second: attacks, the player's hits and kills, crowd cries;
+  - 4–5 for what plays every few seconds;
+  - 1–3 for rare sounds and for fixed cues, which should sound the same every time.
+
+  A sound with two takes heard every 2.5 s read as "repetitive" to the playtester.
+  - **Shuffle, don't just avoid the last.** Never pick one of the last half of the set, as Wwise's
+    shuffle with "avoid repeating last x" does (one team ran 15 footsteps avoiding the last 10).
+  - **Vary each layer on its own.** Five takes in each of three layers made 125 door sounds
+    (B. Jacobsen). But each added take is another chance of an odd one standing out, and patterns
+    in one layer still show, so keep a set alike in spectrum and envelope.
+  - **On top of that,** pitch ±6% (through `playbackRate`, never on tuned sounds) and gain ±1.5 dB.
 - **Ducking:** on each bus's duck stage, taking the deepest duck, never the sum. Ducking a
   bus's own gain from its current value drifts: overlapping ducks leave it stuck low.
 - **Loudness:**
@@ -127,11 +152,13 @@ unsatisfying, and the player stopped playing. So no sound change is done until i
 
 1. **Record real play.** The project supplies a probe: a silent headless browser that plays a
    scripted stretch of a run and records the master, each bus and a trace of voices, limiter
-   reduction, the music tier and the game phase. Use AudioWorklet recorders that all start on the
-   same frame. The contract is in `references/mixing.md`.
+   reduction, the music tier and the game phase, plus how often each sound played. Use
+   AudioWorklet recorders that all start on the same frame. The contract is in
+   `references/mixing.md`.
 2. **Measure it** with `scripts/mixcheck.py`: loudness and true peak, the limiter as a safety,
    the player over the rest, the music under the effects, tier levels, voices, onset density,
-   lull contrast and mud. A check that didn't run says so.
+   lull contrast, mud and repetition. A check that didn't run says so. Check the files' endings
+   with `slice.py --check`.
 3. **Look at the pictures** it saves: the loudness plot puts every bus on one chart, and the
    spectrogram shows mud as a warm smear where separate hits should be.
 4. **Take two captures.** No two runs play the same fight; a change is real when both agree.
