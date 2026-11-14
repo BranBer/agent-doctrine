@@ -9,7 +9,10 @@ prefer is "sharp" (the quickest attacks: impacts), "long" (whooshes, voices) or 
 Optional per sound: "gap" (silence in s that separates takes, default 0.12), "floor_db" (how far
 under the file's peak counts as silence, default -40), "skip_start" (s to drop at the start of
 each take), "from_peak" (s of lead-in kept before each take's loudest moment: a hit must land
-on the hit, not after a swing), "lowcut" (Hz high-pass).
+on the hit, not after a swing), "lowcut" (Hz high-pass), "tune_to" (pitch classes such as
+["D"] or ["F", "A"]: each kept take is resampled by the smallest shift that puts its strongest
+partial on one of them, for tonal sounds the game will never pitch-randomise), "loop" (s of
+equal-power crossfade that turns a long take into a seamless loop: a bed such as a crowd murmur).
 
 Writes <out dir>/<name>-<n>.ogg (mono, 48 kHz, peak -1 dBFS, a 30 ms fade at the end),
 measures.json (every take found, with what it measured and whether it was kept) and
@@ -28,6 +31,7 @@ import soundfile as sf
 from scipy import signal
 
 RATE = 48000
+NOTES = {"C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "F": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10, "Bb": 10, "B": 11}
 
 
 def mono48(path: Path) -> np.ndarray:
@@ -129,18 +133,58 @@ def choose(found: list[dict], spec: dict) -> list[dict]:
     return kept
 
 
+def strongest_hz(t: np.ndarray) -> float:
+    """The strongest partial between 80 Hz and 2 kHz in the first half second: the note a listener hangs a bell on."""
+    seg = t[: int(0.5 * RATE)] * np.hanning(min(len(t), int(0.5 * RATE)))
+    spec = np.abs(np.fft.rfft(seg, n=1 << 16))
+    f = np.fft.rfftfreq(1 << 16, 1 / RATE)
+    band = (f >= 80) & (f <= 2000)
+    return float(f[band][spec[band].argmax()])
+
+
+def tune(t: np.ndarray, classes: list[str]) -> tuple[np.ndarray, float]:
+    """Resamples by the smallest shift (at most 6 semitones) that lands the strongest partial on a wanted pitch class."""
+    hz = strongest_hz(t)
+    midi = 69 + 12 * np.log2(hz / 440)
+    targets = [NOTES[c] for c in classes]
+    shift = min((((tc - midi) % 12 + 6) % 12 - 6 for tc in targets), key=abs)
+    ratio = 2 ** (shift / 12)
+    # Playing back faster raises the pitch: keep `len / ratio` samples.
+    out = signal.resample(t, max(1, int(round(len(t) / ratio))))
+    return out, round(100 * shift)
+
+
+def seamless(t: np.ndarray, xfade: float) -> np.ndarray:
+    """Folds the take's last `xfade` seconds over its start with an equal-power crossfade, so it loops without a seam."""
+    n = int(xfade * RATE)
+    k = np.linspace(0, np.pi / 2, n)
+    y = t[: len(t) - n].copy()
+    y[:n] = t[:n] * np.sin(k) + t[len(t) - n :] * np.cos(k)
+    return y
+
+
 def write(name: str, kept: list[dict], spec: dict, out: Path) -> dict:
     """Writes the kept takes as OGG and returns their provenance entries."""
     provenance = {}
     for i, f in enumerate(kept, 1):
-        t = f["_t"]
-        fade = min(len(t) // 4, int(0.03 * RATE))
-        t[-fade:] *= np.linspace(1, 0, fade)
+        t, cents = f["_t"], 0
+        if spec.get("tune_to"):
+            t, cents = tune(t, spec["tune_to"])
+        if spec.get("loop"):
+            t = seamless(t, spec["loop"])
+        else:
+            fade = min(len(t) // 4, int(0.03 * RATE))
+            t[-fade:] *= np.linspace(1, 0, fade)
         t *= 10 ** (-1 / 20) / (np.abs(t).max() + 1e-12)
         fn = f"{name}-{i}.ogg"
-        sf.write(out / fn, t.astype(np.float32), RATE, format="OGG", subtype="VORBIS")
+        # Written in blocks: libsndfile's Vorbis encoder overflows the stack on Windows when handed
+        # many seconds in one call (an 18 s loop crashed it; 3 s did not).
+        with sf.SoundFile(out / fn, "w", RATE, 1, format="OGG", subtype="VORBIS") as w:
+            for i in range(0, len(t), 16384):
+                w.write(t[i : i + 16384].astype(np.float32))
         provenance[fn] = {"source": Path(f["src"]).name, "library": Path(f["src"]).parent.name, "start_s": f["start_s"],
-                          "end_s": f["end_s"], "licence": spec.get("licence", ""), "edits": "mono, 48 kHz, cut, 30 ms fade, peak -1 dBFS"}
+                          "end_s": f["end_s"], "licence": spec.get("licence", ""),
+                          "edits": "mono, 48 kHz, cut, " + (f"tuned {cents:+d} cents, " if cents else "") + ("crossfaded into a loop, " if spec.get("loop") else "30 ms fade, ") + "peak -1 dBFS"}
     return provenance
 
 

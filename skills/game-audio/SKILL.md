@@ -196,6 +196,7 @@ behind a GUI. In a browser it takes about 200 lines.
 
 ## Related skills
 
+- `sound-design` covers designing the sounds themselves and a palette that makes them one world.
 - `combat-feel` covers what each hit should sound like.
 - `intensity-director` drives the score.
 - `crazygames-publishing` has the portal's audio rules ("Audio levels are consistent") and size caps.
