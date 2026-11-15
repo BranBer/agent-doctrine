@@ -104,6 +104,13 @@ League rates "a spell's importance from 1-10" so "the visual importance matches 
 importance": "if everything is important, nothing is important". Helldivers 2: "reserve the headroom
 for the things that must feel loud".
 
+**Every side of an event has its own tier.** The tier belongs to the moment as each party lives it,
+not to the sound file. Once enemies fought whoever stood in their road, a tank was hit several times
+a second. Its "you're hurt" thud and the duck that came with it had been made as an alarm, and they
+buried the music 14 LU deep. For a tank, being hit is bread-and-butter; only a heavy blow or low
+health is an alarm. A mechanic that changes how often something happens changes its tier, so
+re-read the records it touches.
+
 ## Rules
 
 1. **Start from the player's end.** Write what is felt and sensed first, what is seen to happen next,

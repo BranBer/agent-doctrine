@@ -54,6 +54,8 @@ measured. Both are covered here.
   | Enemy death cry | 250 ms, and played whole |
   | Crowd deaths | all the deaths in one tick play as one sound, a little bigger, from the nearest |
   | The player's kills | several at once play as one, two semitones higher for each extra, up to seven |
+  | The player's own hits | one impact a tick: a swing or a burst that catches five enemies is one sound |
+  | The player being hit | at most every 250 ms; a duck only for a blow over 6% of their health or below 40% health |
 
 - **Ducks take the deepest, never the sum,** capped at 9 dB, on a stage after each bus so they
   always return to the bus's level. Ducking a bus's own gain from its current value drifts:
@@ -168,6 +170,9 @@ bitrate, so it can't hear panning, and no published case shows a model judging a
 | −19.4 LUFS, 1.4 dB under the target, to keep the true peak at −1.2 dBTP | left for the user's ears: louder needs the hits squashed |
 | "They scream in anguish and then it stops": 21 files cut while sounding, at a fixed length with a 30 ms fade, and voices stopped dead at the cap | takes end where they fall silent or on a long exponential release; early stops fade; cries play whole |
 | "Some of the sounds are repetitive": the bow string had one take, heard every 0.4 s; the death and pain cries and the tank's swing had two | 7–8 takes each and a shuffle that avoids the last half; the same take now every 3–15 s |
+| A tank now hit all the time (enemies fight the body in their road): a hurt thud and a duck on every hit buried the music 14 LU deep, and the mix ran at −13.7 LUFS | hurts rationed, ducks only for heavy blows or low health, one impact per tick, the swing itself quieter; −16.0 LUFS and lull contrast 7–9 LU, but the music still sits 12 LU under in a tank run |
+| The player bus over full scale (+2.4 dBFS) with few voices playing: the mage's nova at 0.9 on a bus trimmed ×1.5 | signature moments set lower on the player's bus, and its trim cut to ×1.25; true peak −1.2 to −1.4 dBTP, with one tank capture at −0.8 |
+| The mud band up from −0.3 to +4.3 dB in a mage run: its cast and impact, heard twice a second, put 35–43% of their energy in 200–500 Hz | high-passed at 700 Hz and 400 Hz; +2.2 dB |
 
 ## Sources
 

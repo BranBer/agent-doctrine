@@ -125,6 +125,11 @@ Moving a visual effect's trigger means re-checking its sound.
   keep the 6–8 that share a spectrum and envelope, or derive variants from one hero take.
 - **Ask for a longer take than you need, by 30–50%,** and say how it ends ("trails off into a last
   breath and fades to silence"). A take stops at the length asked for, often mid-sound.
+- **A family's style phrase names material and texture, never intensity.** The fire family's
+  "roaring torch flame", appended to every fire prompt, made a battle-mage's twice-a-second attack
+  "ear torture". The event's tier (`player-vignette`) adds the intensity word: subtle, soft, small for
+  bread-and-butter; huge only for a climax. The player's own prompt that worked: "Crackling, whooshing
+  firebolt impact with a subtle, satisfying hiss."
 - **Expect** leading silence, late quiet peaks (one test peaked 98 ms in), dead air, tails into
   room tone and warble. Process every take through the family chain; reject warble rather than
   repair it. A library click is the most reliable transient over an AI body.
