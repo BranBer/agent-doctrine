@@ -14,6 +14,7 @@ browser, the mix, how to check a mix you can't hear, and an adaptive score.
 | `references/sourcing.md` | the licence table, AI tool terms, the provenance schema |
 | `references/mixing.md` | the full mix spec, the probe contract, the checks and what they found |
 | `references/adaptive-music.md` | AI intensity stems: tools, the pipeline, the stem checks |
+| `references/takes.md` | the judged set: each sound the playtester judged, in their words, and how each measure did against it |
 | `scripts/mixcheck.py` | measures a recorded mix against the checks |
 | `scripts/slice.py` | cuts multi-take library files into measured one-shots that end where the sound ends; `--check` lists files that stop while still sounding |
 | `scripts/sfxgen.py` | generates sound effects with ElevenLabs from a prompt plan, logging each take's provenance |
@@ -83,9 +84,14 @@ licence page before you rely on it.
   it had two causes:
   - **The files.** The cutter capped every take at a fixed length with a 30 ms fade, so a long
     death cry ended at 1 s, mid-scream. Let a take end where it falls silent; cut an over-long one
-    at its quietest moment and give it a release of a quarter of its length (30–400 ms), decaying
-    exponentially as a real sound does. `slice.py` does both, and `slice.py --check <dir>` lists
-    files that still stop while sounding. AI takes stop at the length asked for, often mid-sound.
+    at its quietest moment and give it a release of a quarter of its length (150–400 ms), decaying
+    exponentially as a real sound does. AI takes stop at the length asked for, often mid-sound.
+    `slice.py` does both. It keeps whole takes first, and fails a run that keeps a take cut while
+    sounding with no room to die away. A battle-mage's cast, cut to 0.145 s from near full level
+    with a 36 ms fade, "plays and finishes abruptly". The slicer had only warned, and the takes
+    shipped. The cut is judged there because a short file can't be judged afterwards: a bone crack
+    ends as fast as a cut flame. `slice.py --check <dir>` lists files of 0.2 s or more that stop
+    while sounding.
   - **The engine.** Any voice stopped early, whether replaced at the per-sound cap, choked or
     stolen, stopped dead. Fade every early stop: 50 ms for a steal, 120 ms for a copy replaced by
     a newer one, 80 ms for a choked bell. Wwise's own kill fade is short and fixed, and users
@@ -157,13 +163,41 @@ unsatisfying, and the player stopped playing. So no sound change is done until i
    `references/mixing.md`.
 2. **Measure it** with `scripts/mixcheck.py`: loudness and true peak, the limiter as a safety,
    the player over the rest, the music under the effects, tier levels, voices, onset density,
-   lull contrast, mud and repetition. A check that didn't run says so. Check the files' endings
-   with `slice.py --check`.
+   lull contrast, mud, repetition and exposure (how many seconds of one sound play each second).
+   A check that didn't run says so. Check the files' endings with `slice.py --check`.
 3. **Look at the pictures** it saves: the loudness plot puts every bus on one chart, and the
    spectrogram shows mud as a warm smear where separate hits should be.
 4. **Take two captures.** No two runs play the same fight; a change is real when both agree.
 5. **Then the person listens,** on laptop speakers and a phone. An AI model as a second ear is
    advisory at most: Gemini's API hears in mono at a low bitrate.
+
+## Judging a take without ears
+
+Every measure is tested against the playtester's own verdicts before it is trusted.
+`references/takes.md` holds the judged set and each result.
+
+- **Defects measure well.** Each one a playtester found by ear now has a check:
+  - a take cut while still sounding (`slice.py` fails it);
+  - the same take coming back too soon (check 13);
+  - one sound piling up on itself (check 14);
+  - mud, loudness and balance in the mix.
+- **Taste doesn't measure, yet.** Two candidates went against the verdicts:
+  - **Sharpness** (DIN 45692, the standard measure of screech) got it backwards. The "ear torture"
+    cast measured 1.4–1.6 acum, under the 1.8–2.2 of the impact that was kept.
+  - **Audiobox Aesthetics,** Meta's learned model of production quality, enjoyment and usefulness,
+    got one of two. It put the "ear torture" cast under the kept impact (enjoyment 2.3 against 3.0),
+    but scored the "meh", abrupt cast highest of all (3.5). It pads a short clip to 10 s and doesn't
+    hear the cut.
+
+  So a learned score may rank takes that already pass the defect checks. It never passes or fails
+  one.
+- **The torture was a pile-up, not a file.** No file in that attack was harsh on its own. It
+  layered a 0.6–0.8 s cast, a 1.4 s burst and a noise sweep every 0.6 s: about 3.8 s of sound a
+  second. Check 14 measures that.
+- **Every verdict joins the set,** in the person's own words. A new measure earns trust only when
+  it puts the sounds they called bad under the ones they kept.
+- **Never run a learned model on a Sonniss sound:** the licence forbids any AI use. Signal
+  measures are fine.
 
 ## The adaptive score
 

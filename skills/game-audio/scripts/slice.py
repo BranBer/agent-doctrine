@@ -13,12 +13,14 @@ on the hit, not after a swing), "lowcut" (Hz high-pass), "tune_to" (pitch classe
 ["D"] or ["F", "A"]: each kept take is resampled by the smallest shift that puts its strongest
 partial on one of them, for tonal sounds the game will never pitch-randomise), "loop" (s of
 equal-power crossfade that turns a long take into a seamless loop: a bed such as a crowd murmur),
-"release" (s of fade for a take cut at max_len; default a quarter of its length, 30-400 ms).
+"release" (s of fade for a take cut while sounding; default a quarter of its length, 150-400 ms).
 
 max_len is a ceiling, not a length: a take ends where it falls silent. One that runs past the
 ceiling is cut at its quietest moment in the last third before it (a breath between cries) and
-dies away like a real decay; a take still loud at the cut is named, so raise its max_len when
-the whole sound is wanted. Voices especially: a cry cut mid-breath sounds like a bug.
+dies away like a real decay. A take still loud at the cut (within 20 dB of its peak) is kept only
+when no whole take is left, and it gets at least 150 ms to die away; one too short for that fails
+the run, so raise its max_len. A battle-mage's cast cut to 0.145 s, from -2 dB with a 36 ms fade,
+"plays and finishes abruptly". Voices especially: a cry cut mid-breath sounds like a bug.
 
 Writes <out dir>/<name>-<n>.ogg (mono, 48 kHz, peak -1 dBFS), measures.json (every take found,
 with what it measured and whether it was kept) and provenance.json (each kept file's source and
@@ -26,7 +28,9 @@ offsets). A person still has to listen: the measures only shortlist.
 
     python -I slice.py --check <dir>
 
-lists the files there that stop while still sounding. A seamless loop ends loud on purpose.
+lists the files there of 0.2 s or more that stop while still sounding. A seamless loop ends loud on
+purpose. A shorter file can't be judged from its ending: a bone crack ends as fast as a cut flame,
+so the cut is judged here, while cutting, where the source shows whether the sound went on.
 """
 
 from __future__ import annotations
@@ -40,6 +44,10 @@ import soundfile as sf
 from scipy import signal
 
 RATE = 48000
+# A take cut while still sounding gets at least this long to die away: a cast cut from -2 dB with
+# a 36 ms fade read as stopping, and cries cut with 250-400 ms read as ending.
+MIN_CUT_RELEASE = 0.15
+STILL_SOUNDING_DB = -20
 NOTES = {"C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "F": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10, "Bb": 10, "B": 11}
 
 
@@ -155,7 +163,8 @@ def choose(found: list[dict], spec: dict) -> list[dict]:
     # A take far quieter than the rest is usually a tail or a breath, not a variation.
     usable = [f for f in found if f["rms_db"] >= loudest - 15] or found
     key = {"sharp": lambda f: (f["attack_ms"], -f["rms_db"]), "long": lambda f: -f["length_s"], "loud": lambda f: -f["rms_db"]}
-    ranked = sorted(usable, key=key[spec.get("prefer", "sharp")])
+    # Whole takes first: one cut while still sounding is kept only when nothing whole is left.
+    ranked = sorted(usable, key=lambda f: (still_sounding(f), key[spec.get("prefer", "sharp")](f)))
     want, per_src = spec.get("keep", 5), max(1, len(spec["src"]))
     kept, by_src = [], {}
     for f in ranked:
@@ -164,6 +173,10 @@ def choose(found: list[dict], spec: dict) -> list[dict]:
             by_src[f["src"]] = by_src.get(f["src"], 0) + 1
     kept += [f for f in ranked if f not in kept][: want - len(kept)]
     return kept
+
+
+def still_sounding(f: dict) -> bool:
+    return f["cut_db"] is not None and f["cut_db"] > STILL_SOUNDING_DB
 
 
 def strongest_hz(t: np.ndarray) -> float:
@@ -208,9 +221,10 @@ def write(name: str, kept: list[dict], spec: dict, out: Path) -> dict:
         else:
             # A take that fell silent on its own needs only a short fade; one cut while sounding gets a
             # release long enough to die away. Both decay exponentially, as a real sound does (-60 dB).
-            secs = 0.03 if f["cut_db"] is None else spec.get("release", min(0.4, max(0.03, 0.25 * len(t) / RATE)))
+            secs = 0.03 if f["cut_db"] is None else spec.get("release", min(0.4, max(MIN_CUT_RELEASE, 0.25 * len(t) / RATE)))
             fade = min(len(t) // 2, int(secs * RATE))
             t[-fade:] *= 10 ** (-3 * np.linspace(0, 1, fade))
+            f["release_ms"] = 1000 * fade // RATE
         t *= 10 ** (-1 / 20) / (np.abs(t).max() + 1e-12)
         fn = f"{name}-{i}.ogg"
         # Written in blocks: libsndfile's Vorbis encoder overflows the stack on Windows when handed
@@ -219,7 +233,7 @@ def write(name: str, kept: list[dict], spec: dict, out: Path) -> dict:
             for i in range(0, len(t), 16384):
                 w.write(t[i : i + 16384].astype(np.float32))
         provenance[fn] = {"source": Path(f["src"]).name, "library": Path(f["src"]).parent.name, "start_s": f["start_s"],
-                          "end_s": f["end_s"], "licence": spec.get("licence", ""),
+                          "end_s": f["end_s"], "cut_db": f["cut_db"], "licence": spec.get("licence", ""),
                           "edits": "mono, 48 kHz, cut, " + (f"tuned {cents:+d} cents, " if cents else "") + ("crossfaded into a loop, " if spec.get("loop") else f"{1000 * fade // RATE} ms fade, ") + "peak -1 dBFS"}
     return provenance
 
@@ -251,7 +265,7 @@ def main() -> int:
     plan = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     out = Path(sys.argv[2])
     out.mkdir(parents=True, exist_ok=True)
-    measures, provenance = {}, {}
+    measures, provenance, abrupt = {}, {}, []
     for name, spec in plan.items():
         found = collect(spec)
         if not found:
@@ -262,10 +276,18 @@ def main() -> int:
         measures[name] = [{k: v for k, v in f.items() if k != "_t"} | {"kept": f in kept} for f in found]
         print(f"{name}: {len(found)} takes found, kept {len(kept)}: " + ", ".join(f"{f['length_s']}s/{f['attack_ms']}ms/{f['centroid_hz']}Hz" for f in kept))
         for f in kept:
-            if f["cut_db"] is not None and f["cut_db"] > -20:
-                print(f"  {Path(f['src']).name} at {f['start_s']}s was cut {-f['cut_db']:.0f} dB under its peak, still sounding: raise max_len for the whole sound")
+            if not still_sounding(f) or spec.get("loop"):
+                continue
+            msg = f"{Path(f['src']).name} at {f['start_s']}s was cut {-f['cut_db']:.0f} dB under its peak, still sounding, with {f['release_ms']} ms to die away"
+            if f["release_ms"] < 1000 * MIN_CUT_RELEASE:
+                abrupt.append(f"{name}: {msg}")
+            print(f"  {msg}")
     (out / "measures.json").write_text(json.dumps(measures, indent=1))
     (out / "provenance.json").write_text(json.dumps(provenance, indent=1))
+    if abrupt:
+        print(f"\nFAIL: {len(abrupt)} kept takes stop while sounding, too short to die away. Raise max_len to at least {2 * MIN_CUT_RELEASE} s:")
+        print("\n".join(f"  {a}" for a in abrupt))
+        return 1
     return 0
 
 

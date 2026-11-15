@@ -100,6 +100,10 @@ top one budget and sit at the floor of the other.
 | Climax | a few times a run: an ultimate, a champion's death, the last stand | top | everything else steps back: ducks, shake, the longest tail |
 | Cue | whenever it matters: a threat aimed at me, a reward, the objective hit | top, never masked | fixed: the same every time, its own band, small |
 
+The spectacle floor is spent in the mix, never by making the thing itself weak. A cast asked for as
+"tiny", "soft" and "muffled" came back thin and read as "meh"; the player's own prompt asked for
+"subtle, but stern". Level, length and rate keep a frequent event in its tier.
+
 League rates "a spell's importance from 1-10" so "the visual importance matches the gameplay
 importance": "if everything is important, nothing is important". Helldivers 2: "reserve the headroom
 for the things that must feel loud".

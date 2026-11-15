@@ -104,8 +104,8 @@ stretch of a real run in a silent headless browser and saves, into one folder:
   them;
 - `trace.json`: every 100 ms, `{t, tick, phase, voices, steals, highSteals, culled, reduction,
   tier}`, with "phase" equal to "wave" while enemies come; and once, `plays`: for each sampled
-  sound, `{plays, variants, fixed}` counted while recording, "fixed" marking a cue meant to sound
-  the same every time.
+  sound, `{plays, variants, fixed, seconds}` counted while recording, "fixed" marking a cue meant
+  to sound the same every time and "seconds" adding up each play's length over its playback rate.
 
 Record with an **AudioWorklet**, not a ScriptProcessorNode. The ScriptProcessor runs on the busy
 main thread and dropped about 30% of its blocks, so the stems no longer lined up. Start every
@@ -137,10 +137,14 @@ uv run --no-project --with numpy --with scipy --with soundfile --with pyloudnorm
 | 11 | Mud: 200–500 Hz against 100 Hz–8 kHz | with `--reference`, ≤ +4 dB over a game the user rates well |
 | 12 | spectrogram.png and loudness.png | look at them: separate hits should show as separate lines |
 | 13 | Repetition: how soon the same take comes back, takes × seconds ÷ plays, cues left out | ≥ 4 s for every sound; under 2 s fails (ours) |
+| 14 | Exposure: seconds of each sound played a second | ≤ 1 for every sound (ours): over 1, it overlaps itself |
 
 Check 13 counts each layer of a layered sound on its own, so it is the strict reading: two layers
-of seven takes each come back together only once in 49 plays. Endings are a file check, not a
-capture check: `slice.py --check <dir>`.
+of seven takes each come back together only once in 49 plays. Check 14 is the pile-up behind an
+"ear torture" verdict: a cast and a burst at about 1.2 and 2.3, worked out from their lengths and
+cooldown (`takes.md`). Endings are judged when cutting, not in a capture: `slice.py` fails a take
+cut while sounding with no room to die away, and `slice.py --check <dir>` lists files of 0.2 s or
+more that stop while sounding.
 
 Checks 1 (the falloff curves) and 2 (a single sound placed at 2, 10, 20 and 30 m) belong in the
 project's own tests. A check that did not run is reported as not run.
@@ -173,6 +177,7 @@ bitrate, so it can't hear panning, and no published case shows a model judging a
 | A tank now hit all the time (enemies fight the body in their road): a hurt thud and a duck on every hit buried the music 14 LU deep, and the mix ran at −13.7 LUFS | hurts rationed, ducks only for heavy blows or low health, one impact per tick, the swing itself quieter; −16.0 LUFS and lull contrast 7–9 LU, but the music still sits 12 LU under in a tank run |
 | The player bus over full scale (+2.4 dBFS) with few voices playing: the mage's nova at 0.9 on a bus trimmed ×1.5 | signature moments set lower on the player's bus, and its trim cut to ×1.25; true peak −1.2 to −1.4 dBTP, with one tank capture at −0.8 |
 | The mud band up from −0.3 to +4.3 dB in a mage run: its cast and impact, heard twice a second, put 35–43% of their energy in 200–500 Hz | high-passed at 700 Hz and 400 Hz; +2.2 dB |
+| A fuller cast (0.4–0.55 s, from the player's own prompt) at the old flick's level: the mix up 2 LU, the music 10.5 LU under, mud +3.9 dB | the cast from 0.3 to 0.18; −18.9 LUFS, the music 8.2–8.5 LU under, mud +3.3 dB, the cast at 0.53 s a second |
 
 ## Sources
 

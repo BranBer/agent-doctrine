@@ -42,8 +42,9 @@ the numbers marked "ours" are our own starting values. Sources are at the end.
 - **Let it finish.** Shorten a sound by choosing a shorter take, never by cutting a long one while
   it still sounds: a death scream cut at 1 s with a 30 ms fade read to a playtester as "they scream
   in anguish and then it stops". When a cut is unavoidable, make it at a quiet moment, such as a
-  breath, and let it decay exponentially over a quarter of its length. Cries and lines play whole
-  or not at all.
+  breath, and let it decay exponentially over a quarter of its length, never under 150 ms: a
+  battle-mage's cast cut from near full level with a 36 ms fade "plays and finishes abruptly". Cries
+  and lines play whole or not at all.
 - **Size by formants, not just pitch.** Formant spacing tracks body size; listeners notice about
   8% difference. Shift a boss's formants down 20% or more, and keep variants of one enemy within 4%.
 - **Hyper-real for what the player causes, near-real for the world, real material processed for
@@ -130,6 +131,12 @@ Moving a visual effect's trigger means re-checking its sound.
   "ear torture". The event's tier (`player-vignette`) adds the intensity word: subtle, soft, small for
   bread-and-butter; huge only for a climax. The player's own prompt that worked: "Crackling, whooshing
   firebolt impact with a subtle, satisfying hiss."
+- **Quiet in the mix, never weak in the file.** A cast prompted as "a tiny soft flick of flame
+  leaving a fingertip, a brief muffled puff of fire, subtle and quiet" came back thin, and the
+  playtester called it "meh" (its takes were also cut short, so both played a part). Their own
+  prompt sounded better to them: "mage casts firebolt initial casting ignition, smooth, subtle, but
+  stern". It names who acts and the moment in the action, and pairs a word of restraint with a word
+  of weight. Keep a frequent sound in its tier by level, length and rate, and ask the take for body.
 - **Expect** leading silence, late quiet peaks (one test peaked 98 ms in), dead air, tails into
   room tone and warble. Process every take through the family chain; reject warble rather than
   repair it. A library click is the most reliable transient over an AI body.

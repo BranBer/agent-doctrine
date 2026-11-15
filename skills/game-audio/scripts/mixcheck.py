@@ -7,9 +7,11 @@ The capture dir holds master.wav (required) and, recorded in the same run, any o
 player.wav and crowd.wav (bus stems) and trace.json:
     {"sampleRate": 48000, "trace": [{"t", "tick", "phase", "voices", "steals", "highSteals",
                                      "culled", "reduction", "tier"}, ...],
-     "plays": {"<sound>": {"plays", "variants", "fixed"}, ...}}
+     "plays": {"<sound>": {"plays", "variants", "fixed", "seconds", "own"}, ...}}
 "plays" counts each sampled sound played while recording, with how many takes it has; "fixed" marks
-a cue meant to sound the same every time (a tuned bell), which the repetition check leaves out.
+a cue meant to sound the same every time (a tuned bell), which the repetition check leaves out;
+"seconds" adds up how long each play lasted (a take's length over its playback rate), which the
+exposure check reads; "own" marks a sound played on the player's own bus.
 "phase" is "wave" while enemies come and anything else in a lull. It prints one line per check -
 PASS, WARN, FAIL, INFO or NOT RUN with the reason - writes report.json and saves spectrogram.png
 and loudness.png for a person or an agent to look at. Exit code 1 when a check failed.
@@ -315,6 +317,24 @@ def check_repetition(c: Capture) -> None:
            f"the same take back no sooner than every 4 s on average (2 fails; ours). Worst: {detail}", worst=dict(worst))
 
 
+def check_exposure(c: Capture) -> None:
+    """Seconds of each sound per second of play. Over 1, a sound overlaps itself on average and stops
+    being a series of events: a battle-mage's 0.6-0.8 s cast and 1.4 s burst, each every 0.6 s, came to
+    about 1.2 and 2.3, and the attack was "ear torture". Its v4 cast and burst, at 0.24 and 0.75, were not.
+    Only the player's own sounds can fail: a crowd's cries ran at 1.2-1.3, quieter with distance and
+    rationed, and no verdict says that hurt. The rest are listed."""
+    share = {k: v["seconds"] / c.seconds for k, v in c.plays.items() if v.get("seconds")}
+    if not share:
+        report("14", "exposure", "NOT RUN", "no seconds in trace.json's plays")
+        return
+    own = sorted(((k, s) for k, s in share.items() if c.plays[k].get("own")), key=lambda kv: -kv[1])[:5]
+    rest = sorted(((k, s) for k, s in share.items() if not c.plays[k].get("own")), key=lambda kv: -kv[1])[:3]
+    detail = "; ".join(f"{k} {s:.2f}" for k, s in own) or "none of the player's own"
+    report("14", "exposure", "FAIL" if own and own[0][1] > 1 else "PASS",
+           f"none of the player's own sounds plays more than 1 s of itself a second (ours). Own: {detail}. "
+           f"Others: {'; '.join(f'{k} {s:.2f}' for k, s in rest)}", own=dict(own), rest=dict(rest))
+
+
 def check_contrast(c: Capture) -> None:
     st_t, st = loudness_series(c.master, c.rate)
     wave, lull = phase_mask(st_t, c.trace, True), phase_mask(st_t, c.trace, False)
@@ -395,6 +415,7 @@ def main() -> int:
     check_contrast(c)
     check_mud(c, ref_dir)
     check_repetition(c)
+    check_exposure(c)
     pictures(c)
     (c.dir / "report.json").write_text(json.dumps(results, indent=1, default=float))
     failed = [r for r in results if r["status"] == "FAIL"]
