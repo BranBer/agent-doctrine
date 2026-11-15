@@ -42,9 +42,11 @@ the numbers marked "ours" are our own starting values. Sources are at the end.
 - **Let it finish.** Shorten a sound by choosing a shorter take, never by cutting a long one while
   it still sounds: a death scream cut at 1 s with a 30 ms fade read to a playtester as "they scream
   in anguish and then it stops". When a cut is unavoidable, make it at a quiet moment, such as a
-  breath, and let it decay exponentially over a quarter of its length, never under 150 ms: a
-  battle-mage's cast cut from near full level with a 36 ms fade "plays and finishes abruptly". Cries
-  and lines play whole or not at all.
+  breath, and let it decay exponentially over a quarter of its length, never under 200 ms. A
+  battle-mage's cast cut from near full level with a 36 ms fade "plays and finishes abruptly", and
+  so did its impact's hiss with 111 ms; the cast recut with 200 ms did not. A sound whose tail runs
+  long, such as a hiss, takes a longer release, not a shorter take. Cries and lines play whole or
+  not at all.
 - **Size by formants, not just pitch.** Formant spacing tracks body size; listeners notice about
   8% difference. Shift a boss's formants down 20% or more, and keep variants of one enemy within 4%.
 - **Hyper-real for what the player causes, near-real for the world, real material processed for

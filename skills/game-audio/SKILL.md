@@ -84,14 +84,22 @@ licence page before you rely on it.
   it had two causes:
   - **The files.** The cutter capped every take at a fixed length with a 30 ms fade, so a long
     death cry ended at 1 s, mid-scream. Let a take end where it falls silent; cut an over-long one
-    at its quietest moment and give it a release of a quarter of its length (150–400 ms), decaying
+    at its quietest moment and give it a release of a quarter of its length (200–400 ms), decaying
     exponentially as a real sound does. AI takes stop at the length asked for, often mid-sound.
     `slice.py` does both. It keeps whole takes first, and fails a run that keeps a take cut while
-    sounding with no room to die away. A battle-mage's cast, cut to 0.145 s from near full level
-    with a 36 ms fade, "plays and finishes abruptly". The slicer had only warned, and the takes
-    shipped. The cut is judged there because a short file can't be judged afterwards: a bone crack
-    ends as fast as a cut flame. `slice.py --check <dir>` lists files of 0.2 s or more that stop
-    while sounding.
+    sounding with no room to die away. The playtester called two cuts abrupt:
+    - a battle-mage's cast, cut to 0.145 s from near full level with a 36 ms fade ("plays and
+      finishes abruptly"). The slicer had only warned, and the takes shipped;
+    - its impact, a hiss cut 10–30 dB under its peak with a 111 ms fade.
+
+    The cast recut with 200 ms passed, and so did cries with 250–400 ms.
+  - **Judge the cut while cutting.** A short file can't be judged afterwards: a bone crack ends as
+    fast as a cut flame. `slice.py --check <dir>` lists files of 0.2 s or more that stop while
+    sounding.
+  - **Audit everything that already shipped** with `slice.py --audit <provenance> <source dirs>`
+    whenever these rules change. It goes back to each take's source and finds the ones cut while
+    sounding. Fixing the two takes the playtester heard left nine other sounds cut the same way,
+    the archer's arrow and the tank's swing among them.
   - **The engine.** Any voice stopped early, whether replaced at the per-sound cap, choked or
     stolen, stopped dead. Fade every early stop: 50 ms for a steal, 120 ms for a copy replaced by
     a newer one, 80 ms for a choked bell. Wwise's own kill fade is short and fixed, and users

@@ -178,6 +178,7 @@ bitrate, so it can't hear panning, and no published case shows a model judging a
 | The player bus over full scale (+2.4 dBFS) with few voices playing: the mage's nova at 0.9 on a bus trimmed ×1.5 | signature moments set lower on the player's bus, and its trim cut to ×1.25; true peak −1.2 to −1.4 dBTP, with one tank capture at −0.8 |
 | The mud band up from −0.3 to +4.3 dB in a mage run: its cast and impact, heard twice a second, put 35–43% of their energy in 200–500 Hz | high-passed at 700 Hz and 400 Hz; +2.2 dB |
 | A fuller cast (0.4–0.55 s, from the player's own prompt) at the old flick's level: the mix up 2 LU, the music 10.5 LU under, mud +3.9 dB | the cast from 0.3 to 0.18; −18.9 LUFS, the music 8.2–8.5 LU under, mud +3.3 dB, the cast at 0.53 s a second |
+| Ten sounds re-cut so they die away, the impact among them: its new takes peak at the hit and then fall away into a 0.3 s hiss, so the mage's mix fell 1.5 LU and its own hits cleared the rest less often (89–90%, from 93%) | the impact from 0.5 to 0.6; −19.2 to −19.6 LUFS, own hits 90–94%. Archer and tank runs matched the old files' runs |
 
 ## Sources
 

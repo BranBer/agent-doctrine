@@ -13,12 +13,12 @@ on the hit, not after a swing), "lowcut" (Hz high-pass), "tune_to" (pitch classe
 ["D"] or ["F", "A"]: each kept take is resampled by the smallest shift that puts its strongest
 partial on one of them, for tonal sounds the game will never pitch-randomise), "loop" (s of
 equal-power crossfade that turns a long take into a seamless loop: a bed such as a crowd murmur),
-"release" (s of fade for a take cut while sounding; default a quarter of its length, 150-400 ms).
+"release" (s of fade for a take cut while sounding; default a quarter of its length, 200-400 ms).
 
 max_len is a ceiling, not a length: a take ends where it falls silent. One that runs past the
 ceiling is cut at its quietest moment in the last third before it (a breath between cries) and
 dies away like a real decay. A take still loud at the cut (within 20 dB of its peak) is kept only
-when no whole take is left, and it gets at least 150 ms to die away; one too short for that fails
+when no whole take is left, and it gets at least 200 ms to die away; one too short for that fails
 the run, so raise its max_len. A battle-mage's cast cut to 0.145 s, from -2 dB with a 36 ms fade,
 "plays and finishes abruptly". Voices especially: a cry cut mid-breath sounds like a bug.
 
@@ -31,11 +31,20 @@ offsets). A person still has to listen: the measures only shortlist.
 lists the files there of 0.2 s or more that stop while still sounding. A seamless loop ends loud on
 purpose. A shorter file can't be judged from its ending: a bone crack ends as fast as a cut flame,
 so the cut is judged here, while cutting, where the source shows whether the sound went on.
+
+    python -I slice.py --audit <provenance.json> <source dir>...
+
+goes back to the source of every cut take a provenance file names (a game's list, or this
+script's own record) and lists the sounds whose takes were still within 30 dB of their peak where
+they were cut, with less than 200 ms to die away. Run it whenever these rules change, over
+everything already shipped: fixing the one take a playtester heard left nine other sounds cut the
+same way.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -44,9 +53,10 @@ import soundfile as sf
 from scipy import signal
 
 RATE = 48000
-# A take cut while still sounding gets at least this long to die away: a cast cut from -2 dB with
-# a 36 ms fade read as stopping, and cries cut with 250-400 ms read as ending.
-MIN_CUT_RELEASE = 0.15
+# A take cut while still sounding gets at least this long to die away. A playtester heard 36 ms
+# (a cast) and 111 ms (an impact's hiss) as stopping; 200 ms (the recut cast) and 250-400 ms (cries)
+# as ending.
+MIN_CUT_RELEASE = 0.2
 STILL_SOUNDING_DB = -20
 NOTES = {"C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "F": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10, "Bb": 10, "B": 11}
 
@@ -234,7 +244,9 @@ def write(name: str, kept: list[dict], spec: dict, out: Path) -> dict:
                 w.write(t[i : i + 16384].astype(np.float32))
         provenance[fn] = {"source": Path(f["src"]).name, "library": Path(f["src"]).parent.name, "start_s": f["start_s"],
                           "end_s": f["end_s"], "cut_db": f["cut_db"], "licence": spec.get("licence", ""),
-                          "edits": "mono, 48 kHz, cut, " + (f"tuned {cents:+d} cents, " if cents else "") + ("crossfaded into a loop, " if spec.get("loop") else f"{1000 * fade // RATE} ms fade, ") + "peak -1 dBFS"}
+                          "edits": "mono, 48 kHz, " + (f"high-passed at {spec['lowcut']} Hz, " if spec.get("lowcut") else "") + "cut, "
+                          + (f"tuned {cents:+d} cents, " if cents else "") + ("crossfaded into a loop, " if spec.get("loop") else f"{1000 * fade // RATE} ms fade, ")
+                          + "peak -1 dBFS"}
     return provenance
 
 
@@ -256,9 +268,44 @@ def check(d: Path) -> int:
     return 1 if bad else 0
 
 
+def audit(prov_path: Path, roots: list[Path]) -> int:
+    """Each cut take checked against its source: how loud the source was where the cut fell."""
+    prov = json.loads(prov_path.read_text(encoding="utf-8"))
+    entries = prov if isinstance(prov, list) else [{"file": k} | v for k, v in prov.items()]
+    found: dict[str, Path] = {}
+    bad: dict[str, list[tuple[float, int]]] = {}
+    missing = set()
+    for e in entries:
+        name = e.get("take") or e.get("pack_file") or e.get("source")
+        if "cut_s" not in e and "start_s" not in e or "loop" in e.get("edits", ""):
+            continue
+        if name not in found:
+            hit = next((f for r in roots for f in r.rglob(name)), None)
+            if hit is None:
+                missing.add(name)
+                continue
+            found[name] = hit
+        a, b = (int(v * RATE) for v in e.get("cut_s") or (e["start_s"], e["end_s"]))
+        fade = int(m.group(1)) if (m := re.search(r"(\d+) ms fade", e.get("edits", ""))) else 0
+        x = mono48(found[name])
+        if hp := re.search(r"high-passed at (\d+) Hz", e.get("edits", "")):
+            x = signal.sosfilt(signal.butter(2, int(hp.group(1)), "highpass", fs=RATE, output="sos"), x)
+        at = level_at(x, a, min(b, len(x)))
+        if at > -30 and fade < 1000 * MIN_CUT_RELEASE:
+            bad.setdefault(e.get("role") or e["file"].rsplit("-", 1)[0], []).append((at, fade))
+    for role, rs in sorted(bad.items(), key=lambda kv: -max(r[0] for r in kv[1])):
+        print(f"{role}: {len(rs)} takes cut while sounding, up to {-max(r[0] for r in rs):.0f} dB under their peak, with {sorted({r[1] for r in rs})} ms fades")
+    if missing:
+        print(f"no source found for {len(missing)}: {', '.join(sorted(missing)[:5])}")
+    print(f"{len(bad)} sounds stop while sounding" if bad else "no cut take stops while sounding")
+    return 1 if bad else 0
+
+
 def main() -> int:
     if len(sys.argv) == 3 and sys.argv[1] == "--check":
         return check(Path(sys.argv[2]))
+    if len(sys.argv) >= 4 and sys.argv[1] == "--audit":
+        return audit(Path(sys.argv[2]), [Path(a) for a in sys.argv[3:]])
     if len(sys.argv) != 3:
         print(__doc__)
         return 2

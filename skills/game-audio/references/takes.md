@@ -11,15 +11,21 @@ sounds themselves live in the project's private sound library (`sound-library/ju
 |---|---|---|---|
 | torture | bad (v3.2) | "the battle mage autoattack is ear torture, it feels like screeching in my ears" | a 0.6–0.8 s fire cast and a 0.8–2 s burst every 0.6 s, plus a synthesised noise sweep |
 | flick | bad (v4) | "casting sound effect is meh for battle mage. it plays and finishes abruptly" | the cast cut to 0.145 s; three of six cut 2–15 dB under their peak with a 36 ms fade |
-| impact | kept (v4) | not mentioned in the play that named the cast | the fire bolt's burst, made from the player's own prompt |
+| impact | kept (v4) for its sound | not mentioned in the play that named the cast | the fire bolt's burst, made from the player's own prompt |
+| impact | bad ending (v4.1) | "same treatment needed for the spell end impact. its abrupt" | the same takes: a hiss cut at 0.45 s, 10–30 dB under its peak, with a 111 ms fade |
+| ignite | kept (v4.1), implied | asked for "the same treatment" for the impact | the recut cast: 0.39–0.54 s, cut 4–19 dB under its peak, with 195–200 ms to die away |
 
 Add a row, and the files, every time the person judges a sound.
+
+**What the endings say so far:** a cut take's release decides it, more than how loud the cut
+was. Releases of 36 ms and 111 ms read as abrupt; 195–200 ms, from as near as 4 dB under the
+peak, did not, and neither did the cries' 250–400 ms. The slicer's floor is 200 ms.
 
 ## How each measure did
 
 | Measure | torture | flick | impact | Agrees? |
 |---|---|---|---|---|
-| Cut while sounding (the slicer's `cut_db` and release) | – | three of six cut within 15 dB of the peak, 72 ms to die away: fails | whole | yes |
+| Cut while sounding, judged against the source (`slice.py`, or `--audit` for shipped files) | – | three of six cut within 15 dB of the peak, 36 ms to die away | six of eight cut within 30 dB, 106–111 ms to die away | yes: both were heard as abrupt |
 | Level where the final quarter begins, from the file alone | – | −7 to −29 dB | −11 dB and under | no: bone cracks, horns and long cries sit higher, at 0 to −8 dB |
 | Final fade length, from the file alone | – | 25–30 ms | – | no: bow-air and bone cracks fade as fast and are fine |
 | Exposure: seconds of the sound a second, from length × rate | cast 1.2, burst 2.3 | 0.24 | 0.75 | yes, on two sets: over 1 was torture |
