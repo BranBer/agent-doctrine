@@ -192,6 +192,7 @@ experience").
 
 ## Related skills
 
+- `player-vignette` writes the wave and run records whose build, peak and relax this paces.
 - `game-audio` plays the music this drives.
 - `combat-feel` makes each peak land.
 - `games-doctrine` keeps the director headless and deterministic.

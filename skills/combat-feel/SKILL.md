@@ -183,6 +183,8 @@ Test with the CPU throttled to 4× and on a real low-end device.
 
 ## Related skills
 
+- `player-vignette` comes first: an attack's record gives its tier, which sets how much hit-stop,
+  shake and sound each hit gets.
 - `game-audio` covers sound sourcing and the engine.
 - `sound-design` covers what makes each sound satisfying and the palette that makes them one world.
 - `intensity-director` decides when the peaks come.

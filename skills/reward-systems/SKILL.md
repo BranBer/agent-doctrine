@@ -107,3 +107,12 @@ These are starting numbers. Tune them against the platform's measured targets.
 - **Pressure on daily rewards:** "Come back or lose your streak." Pause the streak instead.
 - **Trusting what competitors get away with.** Older games were rated under older criteria. A new
   submission is judged under the current ones.
+- **A pick with an obvious answer.** Two upgrade cards on one screen did the same thing at 20% and
+  30%, and a playtester said "obviously im going to choose the 30 percent". Never offer two
+  options that change the same thing, and prefer options that change how the player plays over
+  ones that only change a number by how much.
+
+## Related skills
+
+- `player-vignette` treats a pick screen or a shop as an event with a record: what the player
+  sees, expects and decides there.

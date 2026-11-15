@@ -164,6 +164,8 @@ and a phone.
 
 ## Related skills
 
+- `player-vignette`: write or read an event's record before designing its sound. Its tier sets
+  the prompt's intensity word and its number of takes; a family's style phrase sets only material.
 - `combat-feel`: the four beats of a hit, hit-stop, reactions and gore.
 - `game-audio`: sourcing and licences, the Web Audio engine, the mix, `mixcheck.py`, `slice.py`
   and `sfxgen.py`.

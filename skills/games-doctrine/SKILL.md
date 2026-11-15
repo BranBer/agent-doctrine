@@ -123,6 +123,9 @@ failed two.
   - the first minute of play.
 
   Mark anything Claude filled in as a guess.
+- **Records of the core events before the build** (`player-vignette`): each role's default
+  attack and key ability, a wave, a run and the pick screen. The user reads them, and their next
+  play tests them.
 - **Relaxed:** the size and folder rules, comment density, test depth and
   per-task reviews.
 - **Kept, so checks can attach later:** the headless sim behind `step` and

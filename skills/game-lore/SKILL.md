@@ -189,6 +189,8 @@ Give each entry its status: `pillar`, `accepted` or `draft`.
 
 ## Related skills
 
+- `player-vignette` takes the fiction's promises (fire burns, a shield blocks) into every
+  dimension of an event.
 - `game-concept-research` picks the concept.
 - `game-audience-research` and `concept-art` take the lore's mood into the art direction and the
   house style.

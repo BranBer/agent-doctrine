@@ -223,6 +223,8 @@ behind a GUI. In a browser it takes about 200 lines.
 
 ## Related skills
 
+- `player-vignette` gives each sound's event a tier, which sets its mix level and whether it can
+  be culled.
 - `sound-design` covers designing the sounds themselves and a palette that makes them one world.
 - `combat-feel` covers what each hit should sound like.
 - `intensity-director` drives the score.
