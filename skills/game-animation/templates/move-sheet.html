@@ -9,7 +9,9 @@
      &trail=ff7a3d also draws the streak a sweep leaves behind the lit tip of what the hero holds,
      as it stands that far into the clip at sixty frames a second.
      It also checks what the hero carries against its body: points of the carried thing (&prop=Bow)
-     that are inside the body or under the ground are drawn red, and window.sheet reports the share per clip. -->
+     that are inside the body or under the ground are drawn red, and window.sheet reports the share per clip.
+     The share is the worst found every twentieth of a second (&every=0.05), not only in the frames drawn:
+     a wand read 6% in six frames of a clip where it reached 17% between them. -->
 <meta charset="utf-8" />
 <body style="margin: 0; background: #ddd">
   <script type="module">
@@ -23,6 +25,7 @@
     const cell = Number(q.get('cell') ?? 220);
     const span = Number(q.get('span') ?? 1.25);
     const views = (q.get('views') ?? 'play,front,side,top').split(',');
+    const every = Number(q.get('every') ?? 0.05);
     const assets = await loadAssets(() => {}, q.get('models') === 'generated');
     const rig = assets.hero(q.get('role') ?? 'archer');
     const specs = (q.get('clips') ?? 'Idle').split(',').map((spec) => {
@@ -108,29 +111,38 @@
     const trail = q.get('trail') && rig.focus ? new (await import('/src/render/trail.ts')).Trail(parseInt(q.get('trail'), 16)) : null;
     if (trail) scene.add(trail.mesh);
     const mixer = rig.mixer;
+    /** Stands the rig at `t` and returns the carried thing's points that are in the body or the ground, and their share. */
+    const clipping = (t) => {
+      mixer.setTime(t);
+      rig.bow?.settle(0);
+      scene.updateMatrixWorld(true);
+      const points = samples();
+      const parts = points.length ? frozen() : [];
+      // Below the ground counts as clipping too.
+      const hit = points.filter((p) => p.y < -0.03 || inside(p, parts));
+      return { hit, share: points.length ? hit.length / points.length : 0 };
+    };
     window.sheet = shown.map((spec, n) => {
       mixer.stopAllAction();
       for (const clip of under) mixer.clipAction(clip).play();
       mixer.clipAction(spec.clip).play();
       let worst = { share: 0, at: 0 };
+      const end = Math.min(spec.to, spec.clip.duration - 1e-3);
+      for (let t = spec.from; t < end; t += every) {
+        const { share } = clipping(t);
+        if (share > worst.share) worst = { share, at: t };
+      }
       for (let i = 0; i < cols; i++) {
-        const t = spec.from + ((Math.min(spec.to, spec.clip.duration - 1e-3) - spec.from) * i) / (cols - 1 || 1);
+        const t = spec.from + ((end - spec.from) * i) / (cols - 1 || 1);
         // The streak is what the frames before this one left, so they are played through first.
         for (let earlier = Math.max(spec.from, t - 0.3); trail && earlier < t; earlier += 1 / 60) {
           mixer.setTime(earlier);
           trail.step(rig.focus.getWorldPosition(new THREE.Vector3()), rig.focus.parent.getWorldPosition(new THREE.Vector3()), true, 1 / 60);
         }
-        mixer.setTime(t);
-        rig.bow?.settle(0);
-        scene.updateMatrixWorld(true);
+        const { hit, share } = clipping(t);
         trail?.step(rig.focus.getWorldPosition(new THREE.Vector3()), rig.focus.parent.getWorldPosition(new THREE.Vector3()), true, 1 / 60);
         marks.clear();
-        const points = samples();
-        const parts = points.length ? frozen() : [];
-        // Below the ground counts as clipping too.
-        const hit = points.filter((p) => p.y < -0.03 || inside(p, parts));
         for (const p of hit) marks.add(new THREE.Mesh(dot, red).translateX(p.x).translateY(p.y).translateZ(p.z));
-        const share = points.length ? hit.length / points.length : 0;
         if (share > worst.share) worst = { share, at: t };
         cams.forEach((cam, k) => {
           const y = cell * (rows - 1 - (n * views.length + k));

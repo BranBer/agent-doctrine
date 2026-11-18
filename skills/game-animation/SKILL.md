@@ -148,6 +148,8 @@ const clip = bake('Bow_Shot', BEATS.drawn, bones, (t) => {
   from the game camera facing three ways and square on, and counts the points of the prop that are
   inside the body or under the ground, drawing them red. Under the ground means more than 3 cm
   below the floor; a prop meant to rest on it will show a few percent, and the report says so.
+  The share is the worst found every twentieth of a second, not only in the frames drawn: six
+  frames of a two-second clip read 6% for a wand that reached 17% between them.
   - Run it for every clip the character plays, not only the new one, and on every model set.
     `templates/qa-moves.mjs` does that in one command for a table of roles, with an allowance per
     carried thing, and fails when a clip is over it. Its first run found five clipping pack clips
