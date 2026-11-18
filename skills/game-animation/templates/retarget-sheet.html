@@ -1,0 +1,104 @@
+<!doctype html>
+<!--
+     Look check for retargeted clips, served by the dev server only:
+       /scripts/retarget-sheet.html?source=<source.glb>&target=<target.glb>&clips=Idle,Attack@0.2-0.5&cols=8&carry=Sword:handslotr
+     Each clip gets two rows of evenly spaced frames: the source model above, the target below.
+     &mark=wristr also reports when that source bone moves fastest in each clip. -->
+<meta charset="utf-8" />
+<body style="margin: 0; background: #ddd">
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { KAYKIT_TO_MIXAMO, plan, retargetClips, socket } from '/src/render/retarget.ts';
+
+    const q = new URLSearchParams(location.search);
+    const cols = Number(q.get('cols') ?? 8);
+    const cell = Number(q.get('cell') ?? 200);
+    const loader = new GLTFLoader();
+    const [source, target] = await Promise.all([loader.loadAsync(`/assets/${q.get('source')}`), loader.loadAsync(`/assets/${q.get('target')}`)]);
+    // A clip may name the part to show, in seconds: Name@0.22-0.5
+    const specs = (q.get('clips') ?? 'Idle').split(',').map((spec) => {
+      const [name, range] = spec.split('@');
+      const clip = source.animations.find((c) => c.name === name);
+      const [from, to] = range ? range.split('-').map(Number) : [0, clip?.duration];
+      return { clip, from, to };
+    }).filter((x) => x.clip);
+    const clips = specs.map((x) => x.clip);
+    const matched = plan(source.scene, target.scene, KAYKIT_TO_MIXAMO, Math.PI / 2);
+    const made = retargetClips(matched, clips);
+    // &carry=1H_Sword:handslotr hangs a source prop on the target, from the source slot it rides.
+    for (const pair of (q.get('carry') ?? '').split(',').filter(Boolean)) {
+      const [prop, slot] = pair.split(':');
+      const at = socket(matched, slot);
+      const held = source.scene.getObjectByName(prop).clone();
+      held.visible = true;
+      const carrier = new THREE.Group().add(held);
+      carrier.position.copy(at.position);
+      carrier.quaternion.copy(at.quaternion);
+      carrier.scale.setScalar(at.scale);
+      target.scene.getObjectByName(at.bone).add(carrier);
+    }
+
+    // The target faces +x; turn it to face +z like the source, and stand both the same height.
+    const holder = new THREE.Group().add(target.scene);
+    holder.rotation.y = -Math.PI / 2;
+    const fit = (o) => {
+      const box = new THREE.Box3().setFromObject(o);
+      o.scale.multiplyScalar(1.8 / (box.max.y - box.min.y));
+    };
+    fit(source.scene);
+    fit(holder);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setSize(cell * cols, cell * clips.length * 2);
+    renderer.setClearColor(0xdddddd);
+    renderer.setScissorTest(true);
+    document.body.append(renderer.domElement);
+    const cam = new THREE.OrthographicCamera(-1.5, 1.5, 1.5, -1.5, 0.01, 100);
+    const view = (q.get('view') ?? '0.7,0.5,1').split(',').map(Number);
+    cam.position.set(...view).normalize().multiplyScalar(10).add(new THREE.Vector3(0, 0.9, 0));
+    cam.lookAt(0, 0.9, 0);
+
+    const rows = clips.length * 2;
+    const draw = (root, clip, row, from, to) => {
+      const scene = new THREE.Scene().add(root, new THREE.HemisphereLight(0xffffff, 0x554444, 2.4));
+      const mixer = new THREE.AnimationMixer(root);
+      mixer.clipAction(clip).play();
+      for (let i = 0; i < cols; i++) {
+        mixer.setTime(from + ((to - from) * i) / (cols - 1 || 1));
+        const y = cell * (rows - 1 - row);
+        renderer.setViewport(i * cell, y, cell, cell);
+        renderer.setScissor(i * cell, y, cell, cell);
+        renderer.render(scene, cam);
+      }
+      mixer.stopAllAction();
+      mixer.uncacheRoot(root);
+    };
+    clips.forEach((clip, i) => {
+      draw(source.scene, clip, i * 2, specs[i].from, Math.min(specs[i].to, clip.duration - 1e-3));
+      draw(holder, made[i], i * 2 + 1, specs[i].from, Math.min(specs[i].to, clip.duration - 1e-3));
+    });
+    // Where a bone moves fastest in each clip: for a weapon hand, the swing's contact is at or just after it.
+    const mark = q.get('mark');
+    const fastest = (clip) => {
+      const bone = source.scene.getObjectByName(mark);
+      if (!bone) return '';
+      const mixer = new THREE.AnimationMixer(source.scene);
+      mixer.clipAction(clip).play();
+      const at = (t) => {
+        mixer.setTime(t);
+        source.scene.updateMatrixWorld(true);
+        return bone.getWorldPosition(new THREE.Vector3());
+      };
+      let best = [0, 0];
+      for (let t = 1 / 60; t < clip.duration; t += 1 / 60) {
+        const speed = at(t).distanceTo(at(t - 1 / 60)) * 60;
+        if (speed > best[1]) best = [t, speed];
+      }
+      mixer.stopAllAction();
+      mixer.uncacheRoot(source.scene);
+      return ` fastest ${mark} at ${best[0].toFixed(2)}s`;
+    };
+    window.sheet = clips.map((c) => `${c.name} ${c.duration.toFixed(2)}s${mark ? fastest(c) : ''}`);
+  </script>
+</body>

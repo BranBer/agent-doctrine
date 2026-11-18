@@ -108,6 +108,16 @@ on screen said what to do. Before asking anyone to judge feel:
 - **The controller looks at every picture as a player would,** beside the
   concept. Builds that pass every test have still looked wrong.
 
+## The interface holds still
+
+- **Everything always on screen has a place nothing else uses.** A tooltip drawn where the
+  controls line sat hid the line while it was open, so the line flickered on every pass of the
+  mouse: "visually its annoying. and distracting when im trying to navigate".
+- **Hovering one thing never shows, hides or moves another.**
+- **What is shown can be used.** A wait goes before the reveal, never after it. Perk cards shown
+  dimmed and unclickable for 0.75 s, to guard against a stray click, read as "a weird freeze";
+  the pause before the cards was already the guard.
+
 ## The prototype lane
 
 Until the user has played a game's core loop and said to keep it, its build is
@@ -126,6 +136,12 @@ failed two.
 - **Records of the core events before the build** (`player-vignette`): each role's default
   attack and key ability, a wave, a run and the pick screen. The user reads them, and their next
   play tests them.
+- **A mechanic the user names in a word is read back before it is built,** as three lines: what
+  the player presses or holds, what they see, and what it costs them. Take the word's meaning
+  from the games the user plays, never from what is cheapest to build. "A beam" was built as a
+  ribbon drawn over the existing bolt, because that changed no rule; the user meant a held
+  channel that slows the caster, which is what the word means in the games they play. "There
+  should be a pause" was built as cards shown dead for 0.75 s; the pause was meant before them.
 - **Relaxed:** the size and folder rules, comment density, test depth and
   per-task reviews.
 - **Kept, so checks can attach later:** the headless sim behind `step` and
@@ -155,10 +171,13 @@ Game Studios (MIT).
 | A sim rule | A headless test. |
 | Anything the player sees | Launch at a fixed size, reach the state by URL, take a screenshot and open it. Report OBSERVED, or NOT VERIFIED and why. It covers the look, not the feel. |
 | What the sim does over a run | A seeded replay compared with the last accepted one. |
+| A new enemy, ability or item | Bot runs that count, wave by wave, how often it appears and how often it does its thing at least once. Whole-run averages hide a wave where it never acts, and one that never acts in the wave that introduces it has not been introduced. |
+| An upgrade, perk or setting that changes a time, a size or a count | Take it in the running game and look at everything that draws that number. A picture timed off the tuning table passes every test until the perk is taken: a meteor's rock landed after its blast under the perk that halves the fall. The view reads a time from the thing itself (the zone's own life), never from the table. |
+| The interface | In a browser, hover every tip and open every menu, at two widths, and note what else moved, hid or could not be clicked. |
 | Performance | A bench under CPU throttling. |
 | Feel, balance, a whole session | The user playing it. Never automated, and no feel verdict before they have played. |
 
-In the prototype lane only the second and last rows are required. A check that
+In the prototype lane only the second and last rows are required, the upgrade and interface rows whenever one changes, and the new-enemy row whenever one is added: it decides whether the user's play can test anything. A check that
 did not run is reported as not run, never as passed.
 
 ## What keeps a 3D scene believable
@@ -253,8 +272,10 @@ publishing skill before writing the game, not just before submitting it. For
 CrazyGames, that is `crazygames-publishing`. Each rule there becomes a test.
 
 Art follows the same order. Make concepts and orthographic sheets with `concept-art`, which
-keeps AI images out of the build. Check every model against its sheet with `model-qa` before
-calling it done.
+keeps AI images out of the build. Generate organic models from those sheets with `model-gen`,
+code the parametric ones, and check every model against its sheet with `model-qa` before
+calling it done. Attacks are authored as moves with `game-animation`, and their sounds are timed to
+them with `action-sync`.
 
 ## The legitimate big files
 

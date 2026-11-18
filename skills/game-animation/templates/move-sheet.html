@@ -1,0 +1,147 @@
+<!doctype html>
+<!-- PROTOTYPE - NOT FOR PRODUCTION
+     Look check for a hero's moves, on the rig the game builds, served by the dev server only:
+       /scripts/move-sheet.html?role=archer&clips=Bow_Shot,Idle&under=Legs_Idle&cols=8&views=play,front,side,top[&models=generated]
+     Each clip gets a row of evenly spaced frames for each view. A clip may name the part to show, in
+     seconds (Name@0.1-0.3). `under` names clips that play beneath every clip shown, for one that moves only part of the body.
+     Views: play, toward and away are the game camera's angle with the hero facing right, at the
+     camera and away from it; front, side, back and top are square on.
+     &trail=ff7a3d also draws the streak a sweep leaves behind the lit tip of what the hero holds,
+     as it stands that far into the clip at sixty frames a second.
+     It also checks what the hero carries against its body: points of the carried thing (&prop=Bow)
+     that are inside the body or under the ground are drawn red, and window.sheet reports the share per clip. -->
+<meta charset="utf-8" />
+<body style="margin: 0; background: #ddd">
+  <script type="module">
+    import * as THREE from 'three';
+    // The project own lines: these load its rigs the way the game does. A rig here is
+    // { root, mixer, clips: Map<name, clip>, bow?: { settle(dt) }, focus?: a mesh on the tip of what is held }.
+    import { loadAssets } from '/src/render/models.ts';
+
+    const q = new URLSearchParams(location.search);
+    const cols = Number(q.get('cols') ?? 8);
+    const cell = Number(q.get('cell') ?? 220);
+    const span = Number(q.get('span') ?? 1.25);
+    const views = (q.get('views') ?? 'play,front,side,top').split(',');
+    const assets = await loadAssets(() => {}, q.get('models') === 'generated');
+    const rig = assets.hero(q.get('role') ?? 'archer');
+    const specs = (q.get('clips') ?? 'Idle').split(',').map((spec) => {
+      const [name, range] = spec.split('@');
+      const clip = rig.clips.get(name);
+      const [from, to] = range ? range.split('-').map(Number) : [0, clip?.duration];
+      return { name, clip, from, to };
+    });
+    const missing = specs.filter((s) => !s.clip).map((s) => s.name);
+    const shown = specs.filter((s) => s.clip);
+    const under = (q.get('under') ?? '').split(',').map((name) => rig.clips.get(name)).filter(Boolean);
+
+    const CAMERA = { play: [-19, 32, 0], toward: [0, 32, 19], away: [0, 32, -19], front: [0, 0, 1], side: [1, 0, 0], back: [0, 0, -1], top: [0, 1, 0.001] };
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setSize(cell * cols, cell * shown.length * views.length);
+    renderer.setClearColor(0x7c8474);
+    renderer.setScissorTest(true);
+    document.body.append(renderer.domElement);
+    const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+    sun.position.set(-6, 12, 4);
+    const marks = new THREE.Group();
+    const scene = new THREE.Scene().add(rig.root, new THREE.HemisphereLight(0xffffff, 0x554444, 1.6), sun, marks);
+    const cams = views.map((v) => {
+      const cam = new THREE.OrthographicCamera(-span, span, span, -span, 0.01, 100);
+      cam.position.set(...CAMERA[v]).normalize().multiplyScalar(10).add(new THREE.Vector3(0, 0.95, 0));
+      cam.lookAt(0, 0.95, 0);
+      return cam;
+    });
+
+    // The carried thing against the body. A point is inside when a ray from it meets one body part
+    // in all six directions.
+    const prop = rig.root.getObjectByName(q.get('prop') ?? 'Bow');
+    const hands = [];
+    const body = [];
+    rig.root.traverse((o) => {
+      if (/(handslot[lr]|mixamorig(Left|Right)Hand)$/.test(o.name)) hands.push(o);
+      let inProp = false;
+      for (let p = o; p; p = p.parent) if (p === prop) inProp = true;
+      if (o.isMesh && o.visible && !inProp) body.push(o);
+    });
+    const SIX = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]].map((d) => new THREE.Vector3(...d));
+    const both = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const ray = new THREE.Raycaster();
+    ray.far = 1.2;
+    const v = new THREE.Vector3();
+    /** The body as it stands now, as plain meshes a ray can meet. */
+    const frozen = () => body.map((mesh) => {
+      const pos = mesh.geometry.getAttribute('position');
+      const out = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        if (mesh.isSkinnedMesh) mesh.applyBoneTransform(i, v);
+        v.applyMatrix4(mesh.matrixWorld).toArray(out, i * 3);
+      }
+      const geo = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(out, 3));
+      geo.setIndex(mesh.geometry.index);
+      geo.computeBoundingBox();
+      geo.computeBoundingSphere();
+      return new THREE.Mesh(geo, both);
+    });
+    const inside = (p, parts) => parts.some((part) => part.geometry.boundingBox.containsPoint(p) && SIX.every((d) => (ray.set(p, d), ray.intersectObject(part).length > 0)));
+    /** Points of the carried thing, clear of the hands that hold it. */
+    const samples = () => {
+      const at = hands.map((h) => h.getWorldPosition(new THREE.Vector3()));
+      const out = [];
+      prop?.traverse((o) => {
+        if (!o.isMesh) return;
+        for (let p = o; p && p !== prop.parent; p = p.parent) if (!p.visible) return;
+        const pos = o.geometry.getAttribute('position');
+        const step = Math.max(1, Math.floor(pos.count / 24));
+        for (let i = 0; i < pos.count; i += step) {
+          const w = new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+          if (at.every((h) => h.distanceTo(w) > 0.18)) out.push(w);
+        }
+      });
+      return out;
+    };
+
+    const dot = new THREE.SphereGeometry(0.035, 6, 4);
+    const red = new THREE.MeshBasicMaterial({ color: 0xff0033, depthTest: false });
+    const rows = shown.length * views.length;
+    // The project's own: the streak behind a swung thing, and the light on its tip that the streak follows.
+    const trail = q.get('trail') && rig.focus ? new (await import('/src/render/trail.ts')).Trail(parseInt(q.get('trail'), 16)) : null;
+    if (trail) scene.add(trail.mesh);
+    const mixer = rig.mixer;
+    window.sheet = shown.map((spec, n) => {
+      mixer.stopAllAction();
+      for (const clip of under) mixer.clipAction(clip).play();
+      mixer.clipAction(spec.clip).play();
+      let worst = { share: 0, at: 0 };
+      for (let i = 0; i < cols; i++) {
+        const t = spec.from + ((Math.min(spec.to, spec.clip.duration - 1e-3) - spec.from) * i) / (cols - 1 || 1);
+        // The streak is what the frames before this one left, so they are played through first.
+        for (let earlier = Math.max(spec.from, t - 0.3); trail && earlier < t; earlier += 1 / 60) {
+          mixer.setTime(earlier);
+          trail.step(rig.focus.getWorldPosition(new THREE.Vector3()), rig.focus.parent.getWorldPosition(new THREE.Vector3()), true, 1 / 60);
+        }
+        mixer.setTime(t);
+        rig.bow?.settle(0);
+        scene.updateMatrixWorld(true);
+        trail?.step(rig.focus.getWorldPosition(new THREE.Vector3()), rig.focus.parent.getWorldPosition(new THREE.Vector3()), true, 1 / 60);
+        marks.clear();
+        const points = samples();
+        const parts = points.length ? frozen() : [];
+        // Below the ground counts as clipping too.
+        const hit = points.filter((p) => p.y < -0.03 || inside(p, parts));
+        for (const p of hit) marks.add(new THREE.Mesh(dot, red).translateX(p.x).translateY(p.y).translateZ(p.z));
+        const share = points.length ? hit.length / points.length : 0;
+        if (share > worst.share) worst = { share, at: t };
+        cams.forEach((cam, k) => {
+          const y = cell * (rows - 1 - (n * views.length + k));
+          renderer.setViewport(i * cell, y, cell, cell);
+          renderer.setScissor(i * cell, y, cell, cell);
+          renderer.render(scene, cam);
+        });
+      }
+      return `${spec.name} ${spec.clip.duration.toFixed(2)}s: worst ${(worst.share * 100).toFixed(0)}% of the ${q.get('prop') ?? 'Bow'} inside the body or the ground at ${worst.at.toFixed(2)}s`;
+    });
+    if (missing.length) window.sheet.push(`no such clip: ${missing.join(', ')}`);
+    window.sheetReady = true;
+  </script>
+</body>
