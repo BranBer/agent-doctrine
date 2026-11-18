@@ -75,6 +75,9 @@ Tests, all from the game camera at game zoom with a fight on screen:
 - **Blur:** greyscale, blur, see where the eye lands. It lands on the fight or the test fails.
 - **Worst case:** most enemies, largest telegraphs, each actor on each kind of ground.
 - **Per zone:** floor spread narrower than rim spread; floor line and edge density below the rim's.
+- **Marks on the ground:** a pool, a ring or a telegraph lies unbroken across every kerb, joint and
+  flag. Floor relief stays under the plane those marks are drawn on: a kerb standing 6 cm proud cut
+  every pool that crossed it into stripes.
 
 ## Causes, not scatter
 
