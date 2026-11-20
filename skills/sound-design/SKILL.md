@@ -142,6 +142,14 @@ Moving a visual effect's trigger means re-checking its sound.
 - **Expect** leading silence, late quiet peaks (one test peaked 98 ms in), dead air, tails into
   room tone and warble. Process every take through the family chain; reject warble rather than
   repair it. A library click is the most reliable transient over an AI body.
+- **"Sword" brings a blade's ring.** Asked for "sword being swung wooshing through air" at the
+  default length (2 s and more), most takes rang at 2–6 kHz for 160–540 ms, and the player heard
+  "the clanking of a sword when it should swish". Set the length: the same words at 1 s came back
+  clean 4 times in 5, at a fifth of the credits. Where "sword" still rings (a thrust, an overhead),
+  "wooden sword" gave clean air 12 times in 12. Run `game-audio`'s `ring.py` before picking, and
+  judge likeness only among takes that pass: likeness to a set whose majority rang dropped the clean
+  ones. Cut a whoosh from where it starts to swell, not from its peak, or it plays as a burst. The
+  set rebuilt this way was kept: "the sounds are good, just what i expected."
 - **Licences:** paid plans only for commercial use; log every prompt and take (`game-audio`'s
   `sfxgen.py` does). Never feed a licence-restricted library file, such as Sonniss, to an AI tool.
   A person picks what ships, and AI sounds that ship are declared on Steam.

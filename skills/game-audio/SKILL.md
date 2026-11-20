@@ -17,7 +17,9 @@ browser, the mix, how to check a mix you can't hear, and an adaptive score.
 | `references/takes.md` | the judged set: each sound the playtester judged, in their words, and how each measure did against it |
 | `scripts/mixcheck.py` | measures a recorded mix against the checks |
 | `scripts/slice.py` | cuts multi-take library files into measured one-shots that end where the sound ends; `--check` lists files that stop while still sounding |
+| `scripts/cut.py` | cuts takes at times you choose (several events in one take, a whoosh into its own thud), each ending on a release of at least 200 ms or at its source's end, logging provenance |
 | `scripts/sfxgen.py` | generates sound effects with ElevenLabs from a prompt plan, logging each take's provenance |
+| `scripts/ring.py` | finds metal: how long a partial holds its pitch in each take (120 ms or more rings; air stays under 75); run it on every whoosh or flesh hit before picking takes |
 
 ## Sourcing: free first, AI to fill gaps
 
@@ -95,7 +97,10 @@ licence page before you rely on it.
     The cast recut with 200 ms passed, and so did cries with 250–400 ms.
   - **Judge the cut while cutting.** A short file can't be judged afterwards: a bone crack ends as
     fast as a cut flame. `slice.py --check <dir>` lists files of 0.2 s or more that stop while
-    sounding.
+    sounding, and names the shorter ones it could not judge, and the loops, which a `provenance.json`
+    beside the files marks with "loop": a loop is meant to end while sounding. Run `--audit` after cutting any take,
+    the short ones above all: a stab's whoosh cut to 0.17 s with an 82 ms fade passed `--check`,
+    and the playtester heard it "cut off abruptly".
   - **Audit everything that already shipped** with `slice.py --audit <provenance> <source dirs>`
     whenever these rules change. It goes back to each take's source and finds the ones cut while
     sounding. Fixing the two takes the playtester heard left nine other sounds cut the same way,

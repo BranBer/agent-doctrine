@@ -252,19 +252,33 @@ def write(name: str, kept: list[dict], spec: dict, out: Path) -> dict:
 
 def check(d: Path) -> int:
     """Lists files of 0.2 s or more still within 24 dB of their peak 30-50 ms before they end: cut, not finished.
-    Shorter files are clicks and hits, all attack, and are left to the ear."""
+    A shorter file can't be judged from itself (a bone crack ends as fast as a cut whoosh), so it is named as
+    skipped: judge it with --audit against its source. A stab's whoosh cut to 0.17 s with an 82 ms fade
+    passed this check silently and was heard as "cut off abruptly". A loop is meant to stop while sounding: one
+    whose record in the folder's provenance.json says "loop" is named as a loop and not judged."""
     bad = 0
+    short = []
+    prov = json.loads((d / "provenance.json").read_text(encoding="utf-8")) if (d / "provenance.json").exists() else []
+    entries = prov if isinstance(prov, list) else [{"file": k} | v for k, v in prov.items()]
+    loops = sorted(e["file"] for e in entries if "loop" in (e.get("edits", "") + e.get("what", "")).lower())
     for f in sorted(d.glob("*.ogg")):
+        if f.name in loops:
+            continue
         x, rate = sf.read(f, always_2d=True)
         x = x.mean(axis=1)
         if len(x) < 0.2 * rate:
+            short.append(f.name)
             continue
         seg = x[len(x) - int(0.05 * rate) : len(x) - int(0.03 * rate)]
         db = 20 * np.log10(np.sqrt(np.mean(seg**2)) / (np.abs(x).max() + 1e-12) + 1e-12)
         if db > -24:
             bad += 1
             print(f"{f.name}: {db:.0f} dB under its peak 40 ms before the end ({len(x) / rate:.2f} s): it stops while still sounding")
-    print(f"{bad} files end abruptly" if bad else "no file ends abruptly")
+    print(f"{bad} files end abruptly" if bad else "no file of 0.2 s or more ends abruptly")
+    if loops:
+        print(f"loops, not judged ({len(loops)}): {', '.join(loops)}")
+    if short:
+        print(f"not judged, under 0.2 s ({len(short)}): {', '.join(short[:12])}{' ...' if len(short) > 12 else ''}; run --audit on their cuts")
     return 1 if bad else 0
 
 
@@ -286,7 +300,8 @@ def audit(prov_path: Path, roots: list[Path]) -> int:
                 continue
             found[name] = hit
         a, b = (int(v * RATE) for v in e.get("cut_s") or (e["start_s"], e["end_s"]))
-        fade = int(m.group(1)) if (m := re.search(r"(\d+) ms fade", e.get("edits", ""))) else 0
+        # "82 ms fade", "250 ms release" and "60 ms exponential release" all name the cut's ending.
+        fade = int(m.group(1)) if (m := re.search(r"(\d+) ms (?:exponential )?(?:fade|release)", e.get("edits", ""))) else 0
         x = mono48(found[name])
         if hp := re.search(r"high-passed at (\d+) Hz", e.get("edits", "")):
             x = signal.sosfilt(signal.butter(2, int(hp.group(1)), "highpass", fs=RATE, output="sos"), x)

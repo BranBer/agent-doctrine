@@ -14,6 +14,8 @@ sounds themselves live in the project's private sound library (`sound-library/ju
 | impact | kept (v4) for its sound | not mentioned in the play that named the cast | the fire bolt's burst, made from the player's own prompt |
 | impact | bad ending (v4.1) | "same treatment needed for the spell end impact. its abrupt" | the same takes: a hiss cut at 0.45 s, 10–30 dB under its peak, with a 111 ms fade |
 | ignite | kept (v4.1), implied | asked for "the same treatment" for the impact | the recut cast: 0.39–0.54 s, cut 4–19 dB under its peak, with 195–200 ms to die away |
+| clank | bad (game three, 2026-11-20) | "no the sounds dont sound good for the sword swish. i shouldnt hear the clanking of a sword when it should swish." | a tank's swing, stab, overhead and hit, ElevenLabs v3 at its default length from the player's own words ("sword being swung wooshing through air"); every stroke take rang like a blade, and each whoosh was cut from 20 ms before its peak |
+| air | kept (game three, 2026-11-20) | "the sounds are good, just what i expected." | the clank set rebuilt: 1 s takes of the same words ("wooden sword" for the stab and the overhead), kept only where `ring.py` found no ring (16–53 ms), each whoosh cut from 15 dB under its peak so it keeps its rise; the hits the same takes as before with their ring turned down to the spectrum round it (29–58 ms) |
 
 Add a row, and the files, every time the person judges a sound.
 
@@ -33,6 +35,14 @@ peak, did not, and neither did the cries' 250–400 ms. The slicer's floor is 20
 | Mud share, 200–500 Hz | 0.36–0.46 (cast) | 0.10–0.16 | 0.17–0.39 | partly: the cast was muddy, the kept impact is too |
 | Audiobox Aesthetics, enjoyment (CE) | 2.3 (cast), 1.5 (burst) | 3.5 | 3.0 | half: torture lowest, but the abrupt flick highest |
 | Audiobox Aesthetics, production quality (PQ) | 5.5 (cast), 4.6 (burst) | 7.2 | 5.9 | half, the same way |
+
+**Metal, `ring.py`** (how long one partial holds its pitch 12 dB over the spectrum round it): every
+clank take, 160–340 ms for the strokes and up to 540 ms for six of eight hits; air made in-house,
+16–75 ms. It agrees on both verdicts so far: the clank set rang, and the air set that replaced it,
+kept, rang 16–58 ms. Its cause was the length asked for. The same words at 1 s came back clean 4 times in 5, against 3 in 12
+at the default, and "wooden sword" 12 in 12 where "sword" still rang for a thrust or an overhead. A
+pick by likeness to the set made it worse: most of the set rang, so the three clean takes were the
+odd ones out and were dropped. Measure defects first, then likeness among what passes.
 
 The torture verdict was about the whole attack in the mix, so per-file numbers can only partly
 explain it. Exposure explains it best: no file was harsh on its own, but the files piled up. The
